@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vigilo – Your AI-Powered Compliance Guardian
 
-## Getting Started
+**Tired of drowning in endless paperwork and chasing compliance deadlines?**  
+Vigilo is here to change that. No more missed deadlines. No surprise penalties. Just seamless, automated compliance.
 
-First, run the development server:
+## What is Vigilo?
+Vigilo is an intelligent AI agent built with **open-source AI models** and **RAG pipelines** that reads regulations, tracks updates, and alerts you in real-time. It’s designed for businesses of all sizes — from small food outlets to large pharma companies.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Key Features
+- ✅ Real-time compliance deadline tracking  
+- ✅ Intelligent interpretation of regulatory updates  
+- ✅ Automated alerts and dashboard monitoring  
+- ✅ Built using advanced open-source AI frameworks  
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
+- **AI & NLP:** Open-source LLMs (GPT, LLaMA, Deepseek etc.), LangChain, RAG pipelines, 
+- **Backend:** FastAPI  
+- **Database:** Vector DB (Chroma) for retrieval-augmented generation  
+- **Frontend:** Next.js
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Stop stressing. Start trusting Vigilo. Your compliance, simplified.
