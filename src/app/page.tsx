@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Upload, Globe, Shield, Zap, ArrowRight, CheckCircle, BarChart3, AlertTriangle } from 'lucide-react';
+import { Play, Upload, Globe, Shield, Zap, ArrowRight, CheckCircle, BarChart3, AlertTriangle, Link } from 'lucide-react';
 
 const VigiliLandingPage = () => {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -117,6 +117,7 @@ const DataPulse = ({ top, left, delay }: DataPulseProps) => (
                 Vigilo
               </h1>
             </div>
+            
 
             {/* Main Tagline */}
             <div className="space-y-4">
@@ -149,24 +150,26 @@ const DataPulse = ({ top, left, delay }: DataPulseProps) => (
               </div>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button className="group bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 py-4 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-emerald-500/25">
-                <Upload className="w-5 h-5" />
-                <span>Upload Compliance Docs</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
+{/* CTA Buttons */}
+<div className="flex flex-col sm:flex-row gap-4">
+  <button 
+    onClick={() => window.location.href = '/signup'}
+    className="group bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 py-4 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-emerald-500/25"
+  >
+    <Upload className="w-5 h-5" />
+    <span>Get Started</span>
+    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+  </button>
               
-              <button 
-                onClick={() => setIsVideoModalOpen(true)}
-                className="group border-2 border-emerald-500 px-8 py-4 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:bg-emerald-500/10 transition-all duration-300"
-              >
-                <Play className="w-5 h-5" />
-                <span>Watch Demo</span>
-              </button>
-            </div>
+  <button 
+    onClick={() => setIsVideoModalOpen(true)}
+    className="group border-2 border-emerald-500 px-8 py-4 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:bg-emerald-500/10 transition-all duration-300"
+  >
+    <Play className="w-5 h-5" />
+    <span>Watch Demo</span>
+  </button>
+</div>
           </div>
-
           {/* Right Content - 3D Globe */}
           <div className="relative flex justify-center">
             <div className="relative w-96 h-96">
@@ -286,7 +289,7 @@ const DataPulse = ({ top, left, delay }: DataPulseProps) => (
 
       {/* Video Modal */}
       {isVideoModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-blue/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 rounded-2xl border border-emerald-500/30 max-w-4xl w-full">
             <div className="flex justify-between items-center p-6 border-b border-gray-800">
               <h3 className="text-2xl font-bold text-white">Vigilo Demo</h3>
