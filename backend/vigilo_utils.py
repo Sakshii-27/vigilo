@@ -11,6 +11,47 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 import re
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+from datetime import date
+
+class CompanyInfo(BaseModel):
+    company_name: str
+    address: str
+    fssai_license: str
+    fssai_validity: date
+    business_type: str  # manufacturer/distributor/importer/retailer
+    gst_number: Optional[str]
+    incorporation_number: Optional[str]
+
+class ProductInfo(BaseModel):
+    product_name: str
+    category: str
+    ingredients: Dict[str, Optional[float]]  # {ingredient: percentage}
+    nutritional_info: Dict[str, str]  # {nutrient: value}
+    allergens: List[str]
+    batch_number: Optional[str]
+
+class PackagingInfo(BaseModel):
+    label_front_url: str  # Path to stored image/PDF
+    label_back_url: str
+    expiry_format: str  # e.g. "DD/MM/YYYY"
+    packaging_claims: List[str]  # ["organic", "gluten-free", etc.]
+
+class ComplianceDocument(BaseModel):
+    document_type: str  # e.g. "FSSAI License", "Lab Test Report"
+    file_path: str
+    issue_date: date
+    expiry_date: Optional[date]
+    verified: bool = False
+
+class CompanyData(BaseModel):
+    company_info: CompanyInfo
+    legal_documents: List[ComplianceDocument]
+    products: List[ProductInfo]
+    packaging: List[PackagingInfo]
+    optional_data: Optional[Dict[str, str]]  # For ads/supplier info
+
 
 # Configuration
 PDF_DIR = "data/pdfs"
@@ -18,12 +59,19 @@ METADATA_FILE = "data/metadata.json"
 os.makedirs(PDF_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
 
-# Initialize vector store
+# Initialize vector stores
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 vector_store = Chroma(
     collection_name="fssai_notifications",
     embedding_function=embeddings,
     persist_directory="data/vector_db"
+)
+
+# Separate store for company data (optional, for semantic retrieval later)
+company_vector_store = Chroma(
+    collection_name="company_data",
+    embedding_function=embeddings,
+    persist_directory="data/company_vector_db"
 )
 
 def load_metadata() -> List[Dict]:
@@ -154,6 +202,26 @@ def extract_text_from_pdf(path: str) -> str:
         print(f"Error extracting text from {path}: {e}")
     return text.strip()
 
+def extract_text_from_file(path: str) -> str:
+    """Best-effort text extraction for different file types.
+    - PDF: use pdfplumber
+    - TXT: read as text
+    - Others: return empty string
+    """
+    if not path or not os.path.exists(path):
+        return ""
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".pdf":
+        return extract_text_from_pdf(path)
+    if ext in [".txt", ".md", ".csv"]:
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        except Exception:
+            return ""
+    # Image/Docx OCR not implemented in this basic version
+    return ""
+
 def chunk_text(text: str, metadata: Dict) -> List[Document]:
     """Split text into chunks with metadata"""
     text_splitter = RecursiveCharacterTextSplitter(
@@ -233,3 +301,203 @@ def update_vector_db() -> int:
 def get_metadata_store() -> List[Dict]:
     """Get all stored metadata"""
     return load_metadata()
+
+def _parse_date(d: str) -> datetime:
+    # Try common formats used in scraping (e.g., "14-08-2025")
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(d, fmt)
+        except Exception:
+            continue
+    return datetime.min
+
+def get_latest_amendments(limit: int = 6) -> List[Dict]:
+    """Return latest amendments with full text content by reading stored PDFs.
+    Output: [{title, date, content, id}]
+    """
+    meta = load_metadata()
+    # Sort by parsed date descending; unknown at end
+    meta_sorted = sorted(meta, key=lambda m: _parse_date(m.get("date", "")), reverse=True)
+    results: List[Dict] = []
+    for m in meta_sorted[:limit]:
+        content = extract_text_from_pdf(m.get("pdf_path", ""))
+        results.append({
+            "title": m.get("title", ""),
+            "date": m.get("date", "Unknown"),
+            "content": content,
+            "id": m.get("document_id") or hashlib.md5(m.get("pdf_url", "").encode()).hexdigest()
+        })
+    return results
+
+def _load_company_json(company_id: str) -> Optional[Dict]:
+    path = f"data/companies/{company_id}.json"
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            try:
+                return json.load(f)
+            except Exception:
+                return None
+    return None
+
+def get_company_info(company_id: str) -> Optional[Dict]:
+    """Return normalized company info dict used by prompt chain"""
+    data = _load_company_json(company_id)
+    if not data:
+        return None
+    ci = data.get("company_info", {})
+    return {
+        "name": ci.get("company_name", ""),
+        "business_type": ci.get("business_type", ""),
+        "description": data.get("optional_data", {}).get("business_description", ""),
+        "fssai_license": ci.get("fssai_license", ""),
+        "fssai_validity": ci.get("fssai_validity", "")
+    }
+
+def get_company_products(company_id: str) -> List[Dict]:
+    """Return simplified list of products expected by prompt chain"""
+    data = _load_company_json(company_id) or {}
+    products = data.get("products", [])
+    packaging = data.get("packaging", [])
+    claims_all = []
+    for p in packaging:
+        claims_all.extend(p.get("packaging_claims", []) or [])
+    simplified = []
+    for p in products:
+        ingredients = list((p.get("ingredients") or {}).keys())
+        simplified.append({
+            "name": p.get("product_name", "Product"),
+            "category": p.get("category", ""),
+            "ingredients": ingredients,
+            "allergens": p.get("allergens", []) or [],
+            "claims": claims_all or []
+        })
+    return simplified
+
+def get_company_documents(company_id: str) -> List[str]:
+    """Return list of stored legal document file paths for a company"""
+    data = _load_company_json(company_id) or {}
+    docs = []
+    for d in data.get("legal_documents", []) or []:
+        if d.get("file_path"):
+            docs.append(d["file_path"])
+    return docs
+
+def ingest_local_pdfs_from(dir_path: str) -> int:
+    """Ingest all PDFs from a local directory as amendments with today's date.
+    Returns number of new entries added.
+    """
+    if not os.path.isdir(dir_path):
+        return 0
+    existing = load_metadata()
+    existing_urls = {m.get("pdf_url") for m in existing}
+    new_count = 0
+    for fname in os.listdir(dir_path):
+        if not fname.lower().endswith(".pdf"):
+            continue
+        fpath = os.path.join(dir_path, fname)
+        # Create a pseudo URL to dedupe
+        pseudo_url = f"file://{os.path.abspath(fpath)}"
+        if pseudo_url in existing_urls:
+            continue
+        title = os.path.splitext(fname)[0].replace('_', ' ')
+        metadata = {
+            "title": title,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "source": "LOCAL",
+            "pdf_url": pseudo_url,
+            "pdf_path": fpath,
+            "document_id": hashlib.md5(pseudo_url.encode()).hexdigest(),
+        }
+        text = extract_text_from_pdf(fpath)
+        if not text:
+            continue
+        docs = chunk_text(text, metadata)
+        vector_store.add_documents(docs)
+        existing.append(metadata)
+        new_count += 1
+    if new_count:
+        save_metadata(existing)
+        vector_store.persist()
+    return new_count
+
+def store_company_data(company_data: CompanyData):
+    """Store all company data with optimized chunking for different data types"""
+    # 1. Store company info as a single document
+    company_doc = Document(
+        page_content=f"""
+        Company: {company_data.company_info.company_name}
+        Address: {company_data.company_info.address}
+        FSSAI: {company_data.company_info.fssai_license} (Valid until: {company_data.company_info.fssai_validity})
+        GST: {company_data.company_info.gst_number}
+        Type: {company_data.company_info.business_type}
+        """,
+        metadata={
+            "type": "company_info",
+            "company_id": hash_company(company_data.company_info.company_name),
+            **company_data.company_info.dict()
+        }
+    )
+    company_vector_store.add_documents([company_doc])
+
+    # 2. Store products with nutritional/allergen focus
+    product_docs = []
+    for product in company_data.products:
+        product_text = f"""
+        Product: {product.product_name}
+        Category: {product.category}
+        Ingredients: {', '.join(f'{k}({v}%)' if v else k for k,v in product.ingredients.items())}
+        Allergens: {', '.join(product.allergens)}
+        Nutrition: {json.dumps(product.nutritional_info, indent=2)}
+        """
+        product_docs.append(Document(
+            page_content=product_text,
+            metadata={
+                "type": "product",
+                "company_id": hash_company(company_data.company_info.company_name),
+                "product_name": product.product_name,
+                **product.dict()
+            }
+        ))
+    company_vector_store.add_documents(product_docs)
+
+    # 3. Store legal documents with extracted text
+    legal_docs = []
+    for doc in company_data.legal_documents:
+        text = extract_text_from_file(doc.file_path)
+        legal_docs.append(Document(
+            page_content=text[:5000],  # First 5k chars
+            metadata={
+                "type": "legal",
+                "document_type": doc.document_type,
+                "company_id": hash_company(company_data.company_info.company_name),
+                **doc.dict()
+            }
+        ))
+    company_vector_store.add_documents(legal_docs)
+
+    # 4. Store packaging claims separately for easy retrieval
+    claim_docs = []
+    for packaging in company_data.packaging:
+        claim_docs.append(Document(
+            page_content=f"Packaging claims: {', '.join(packaging.packaging_claims)}",
+            metadata={
+                "type": "packaging",
+                "company_id": hash_company(company_data.company_info.company_name),
+                "product_names": [p.product_name for p in company_data.products],
+                **packaging.dict()
+            }
+        ))
+    company_vector_store.add_documents(claim_docs)
+
+    company_vector_store.persist()
+    save_company_json(company_data)  # Store complete data as JSON backup
+
+def hash_company(name: str) -> str:
+    return hashlib.md5(name.encode()).hexdigest()
+
+def save_company_json(company_data: CompanyData):
+    """Store complete structured data for retrieval"""
+    path = f"data/companies/{hash_company(company_data.company_info.company_name)}.json"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(company_data.json(indent=2))
