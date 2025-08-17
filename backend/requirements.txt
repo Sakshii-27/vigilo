@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+requests
+beautifulsoup4
+pdfplumber
+langchain-core
+langchain-community
+langchain-chroma
+langchain-text-splitters
+sentence-transformers
+python-dotenv
