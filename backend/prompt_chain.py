@@ -13,21 +13,41 @@ from vigilo_utils import (
     extract_text_from_file
 )
 
-# Load environment
-load_dotenv(dotenv_path=".env.local")
+# Load environment (try project root .env.local and default env)
+backend_dir = os.path.dirname(__file__)
+project_root_env = os.path.abspath(os.path.join(backend_dir, "..", ".env.local"))
+load_dotenv(dotenv_path=project_root_env)
+load_dotenv(dotenv_path=os.path.join(backend_dir, ".env.local"))
 API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=API_KEY) if API_KEY else None
 
-# Model Configuration
-MODEL_ANALYSIS = "deepseek-r1-distill-llama-70b"  # For initial amendment analysis
-MODEL_DETAILS = "openai/gpt-oss-120b"      # For company-specific analysis
-MODEL_COMPLIANCE = "openai/gpt-oss-120b"       # For detailed compliance checks
-MODEL_OPTIMIZE = "meta-llama/llama-prompt-guard-2-22m"  # For final optimization
+# Model Configuration (Groq-supported)
+# Use one strong, widely available model for all stages to simplify parsing.
+MODEL_ANALYSIS = "meta-llama/llama-guard-4-12b"
+MODEL_DETAILS = "openai/gpt-oss-120b"
+MODEL_COMPLIANCE = "openai/gpt-oss-20b"
+MODEL_OPTIMIZE = "deepseek-r1-distill-llama-70b"
 
 class AmendmentAnalyzer:
     def __init__(self):
         self.stage_outputs = {}
         self.current_amendments = []
+    
+    @staticmethod
+    def _strip_to_json(text: str) -> str:
+        """Attempt to extract a JSON object/array from a possibly wrapped reply."""
+        if text is None:
+            return "{}"
+        t = text.strip()
+        # Remove code fences if present
+        if t.startswith("```"):
+            t = "\n".join([line for line in t.splitlines() if not line.strip().startswith("```")])
+        # Heuristic: slice from first '{' or '[' to last '}' or ']'
+        start = min([pos for pos in [t.find('{'), t.find('[')] if pos != -1] or [0])
+        end = max(t.rfind('}'), t.rfind(']'))
+        if end != -1 and end >= start:
+            return t[start:end+1]
+        return t
         
     def log_stage(self, stage_name: str, message: str):
         """Log stage progress with timestamp"""
@@ -47,8 +67,7 @@ class AmendmentAnalyzer:
             response = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model=model,
-                temperature=temperature,
-                max_tokens=4000
+                temperature=temperature
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -70,6 +89,7 @@ class AmendmentAnalyzer:
 {amendment_texts}
 
 **Instructions**:
+SKIP HINDI CONTENT
 1. For each amendment, extract:
    - Purpose/scope (1 sentence)
    - Key requirements (3-5 bullet points)
@@ -107,24 +127,13 @@ class AmendmentAnalyzer:
 
         response = self.call_groq(prompt, MODEL_ANALYSIS)
         self.log_stage("STAGE 1", "Received amendment analysis")
-        # Try robust JSON parsing with extraction and a single retry
-        parsed = self._parse_model_json(response, prompt, MODEL_ANALYSIS)
-        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
-            self.current_amendments = parsed["amendments"]
-            return parsed["amendments"]
-        # Fallback to deterministic local summaries if parsing failed
-        self.log_stage("WARN", "Falling back to local amendment summaries due to parse failure")
-        summaries = []
-        for a in amendments[:5]:
-            summaries.append({
-                "title": a.get("title", "Untitled"),
-                "summary": (a.get("content", "")[:200] + '...') if a.get("content") else a.get("title", ""),
-                "requirements": [],
-                "affected_businesses": [],
-                "impact": "Medium"
-            })
-        self.current_amendments = summaries
-        return summaries
+        try:
+            result = json.loads(self._strip_to_json(response))
+            self.current_amendments = result["amendments"]
+            return result["amendments"]
+        except json.JSONDecodeError:
+            self.log_stage("ERROR", "Failed to parse amendment analysis JSON")
+            raise
 
     def filter_by_company_profile(self, company_data: Dict) -> List[Dict]:
         """Stage 2: Filter amendments relevant to company's basic profile"""
@@ -164,13 +173,14 @@ class AmendmentAnalyzer:
             return filtered
 
         response = self.call_groq(prompt, MODEL_DETAILS)
-        self.log_stage("STAGE 2", "Received company filter response")
-        parsed = self._parse_model_json(response, prompt, MODEL_DETAILS)
-        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
-            self.current_amendments = parsed["amendments"]
-            return parsed["amendments"]
-        self.log_stage("WARN", "Company filter parse failed; returning current amendments as-is")
-        return self.current_amendments
+        try:
+            result = json.loads(self._strip_to_json(response))
+            self.log_stage("STAGE 2", f"Filtered to {len(result['amendments'])} potentially relevant amendments")
+            self.current_amendments = result["amendments"]
+            return result["amendments"]
+        except json.JSONDecodeError:
+            self.log_stage("ERROR", "Failed to parse company filter JSON")
+            raise
 
     def check_product_compliance(self, products: List[Dict]) -> List[Dict]:
         """Stage 3: Check amendments against product details"""
@@ -226,13 +236,14 @@ class AmendmentAnalyzer:
             return product_checked
 
         response = self.call_groq(prompt, MODEL_COMPLIANCE, temperature=0.5)
-        self.log_stage("STAGE 3", "Received product compliance response")
-        parsed = self._parse_model_json(response, prompt, MODEL_COMPLIANCE)
-        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
-            self.current_amendments = parsed["amendments"]
-            return parsed["amendments"]
-        self.log_stage("WARN", "Product compliance parse failed; returning current amendments as-is")
-        return self.current_amendments
+        self.log_stage("STAGE 3", "Processed product-level impacts")
+        try:
+            result = json.loads(self._strip_to_json(response))
+            self.current_amendments = result["amendments"]
+            return result["amendments"]
+        except json.JSONDecodeError:
+            self.log_stage("ERROR", "Failed to parse product compliance JSON")
+            raise
 
     def generate_compliance_plan(self) -> Dict:
         """Stage 4: Generate final compliance action plan"""
@@ -307,73 +318,12 @@ class AmendmentAnalyzer:
             return plan
 
         response = self.call_groq(prompt, MODEL_OPTIMIZE)
-        self.log_stage("STAGE 4", "Received final compliance plan response")
-        parsed = self._parse_model_json(response, prompt, MODEL_OPTIMIZE)
-        if parsed and isinstance(parsed, dict):
-            return parsed
-        self.log_stage("WARN", "Compliance plan parse failed; returning minimal plan")
-        return {"compliance_plan": {"status": "partial", "notes": "Parsing failed"}}
-
-    def _extract_json_from_text(self, text: str) -> Optional[str]:
-        """Extract the first JSON object from arbitrary text by matching braces."""
-        if not text or '{' not in text:
-            return None
-        start = text.find('{')
-        depth = 0
-        for i in range(start, len(text)):
-            ch = text[i]
-            if ch == '{':
-                depth += 1
-            elif ch == '}':
-                depth -= 1
-                if depth == 0:
-                    candidate = text[start:i+1]
-                    return candidate
-        return None
-
-    def _parse_model_json(self, response_text: str, original_prompt: str, model: str) -> Optional[Dict]:
-        """Attempt to parse JSON from model response robustly; retry once with a stricter instruction if needed."""
-        # 1) Direct parse
+        self.log_stage("STAGE 4", "Generated final compliance plan")
         try:
-            return json.loads(response_text)
-        except Exception:
-            pass
-
-        # 2) Strip common markdown/code fences and try again
-        cleaned = response_text.strip()
-        if cleaned.startswith('```') and cleaned.endswith('```'):
-            cleaned = '\n'.join(cleaned.split('\n')[1:-1]).strip()
-            try:
-                return json.loads(cleaned)
-            except Exception:
-                pass
-
-        # 3) Extract first JSON object substring
-        try:
-            candidate = self._extract_json_from_text(response_text)
-            if candidate:
-                return json.loads(candidate)
-        except Exception:
-            pass
-
-        # 4) Retry once with an explicit instruction to return only JSON
-        try:
-            retry_prompt = original_prompt + "\n\nIMPORTANT: Respond ONLY with the valid JSON object that matches the schema above, and nothing else."
-            retry_resp = self.call_groq(retry_prompt, model)
-            # try same parsing steps on retry_resp
-            try:
-                return json.loads(retry_resp)
-            except Exception:
-                # try extraction
-                cand = self._extract_json_from_text(retry_resp)
-                if cand:
-                    return json.loads(cand)
-        except Exception as e:
-            self.log_stage("ERROR", f"Retry parse attempt failed: {e}")
-
-        # 5) Log the raw response for debugging
-        self.log_stage("DEBUG", f"Raw model response (non-JSON): {response_text[:1000]}")
-        return None
+            return json.loads(self._strip_to_json(response))
+        except json.JSONDecodeError:
+            self.log_stage("ERROR", "Failed to parse compliance plan JSON")
+            raise
 
     def run_full_analysis(
         self, 
@@ -385,18 +335,59 @@ class AmendmentAnalyzer:
         self.log_stage("START", f"Beginning analysis for {company_data['name']}")
         
         # Stage 1: Amendment analysis
-        analyzed_amendments = self.analyze_latest_amendments(amendments)
+        try:
+            analyzed_amendments = self.analyze_latest_amendments(amendments)
+        except Exception as e:
+            self.log_stage("STAGE 1", f"Error: {e}. Proceeding with raw amendments summaries.")
+            analyzed_amendments = [
+                {
+                    "title": a.get("title", "Untitled"),
+                    "summary": (a.get("content", "")[:200] + "...") if a.get("content") else a.get("title", ""),
+                    "requirements": [],
+                    "affected_businesses": [],
+                    "impact": "Medium"
+                }
+                for a in amendments[:5]
+            ]
+            self.current_amendments = analyzed_amendments
         
         # Stage 2: Company profile filter
-        profile_filtered = self.filter_by_company_profile(company_data)
+        try:
+            profile_filtered = self.filter_by_company_profile(company_data)
+        except Exception as e:
+            self.log_stage("STAGE 2", f"Error: {e}. Proceeding without additional filtering.")
+            profile_filtered = self.current_amendments
         
         # Stage 3: Product compliance check
-        product_checked = self.check_product_compliance(products)
+        try:
+            product_checked = self.check_product_compliance(products)
+        except Exception as e:
+            self.log_stage("STAGE 3", f"Error: {e}. Proceeding without product-level impacts.")
+            product_checked = []
+            for a in self.current_amendments:
+                a_copy = dict(a)
+                a_copy["product_impacts"] = []
+                product_checked.append(a_copy)
+            self.current_amendments = product_checked
         
         # Stage 4: Final compliance plan
-        compliance_plan = self.generate_compliance_plan()
+        try:
+            compliance_plan = self.generate_compliance_plan()
+        except Exception as e:
+            self.log_stage("STAGE 4", f"Error: {e}. Returning heuristic plan.")
+            # Heuristic minimal plan
+            timeline = [{"timeframe": "Immediate (1-2 weeks)", "actions": []}]
+            for a in self.current_amendments:
+                timeline[0]["actions"].append({
+                    "department": "Legal",
+                    "task": f"Review amendment: {a.get('title', '')}",
+                    "amendments": [a.get('title', '')],
+                    "steps": ["Review text", "Assess product impact", "Update documents if required"],
+                    "urgency": a.get('impact', 'Medium')
+                })
+            compliance_plan = {"compliance_plan": {"timeline": timeline, "summary": {"critical_items": 0, "high_priority": 0, "total_actions": sum(len(t['actions']) for t in timeline)}}}
         
-        self.log_stage("COMPLETE", "Analysis finished successfully")
+        self.log_stage("COMPLETE", "Analysis finished successfully!!!")
         
         return {
             "analysis_steps": self.stage_outputs,
