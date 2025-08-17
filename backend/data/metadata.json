@@ -190,5 +190,53 @@
     "pdf_url": "https://www.fssai.gov.in/upload/notifications/2025/02/67a0549de4490Gazette Notification_Food Analyst.pdf",
     "pdf_path": "data/pdfs/Gazette Notification regarding Food Analyst under _a65ee9e9.pdf",
     "document_id": "a65ee9e9d5960eee495794426fb3664e"
+  },
+  {
+    "title": "GST Certificate",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/GST_Certificate.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/GST_Certificate.pdf",
+    "document_id": "bf1b51379e2eae32e36d0fae384ef5e7"
+  },
+  {
+    "title": "Lab Test Report",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Lab_Test_Report.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Lab_Test_Report.pdf",
+    "document_id": "1b166ddd52362518863ff4c7da3e56d9"
+  },
+  {
+    "title": "FSSAI License",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/FSSAI_License.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/FSSAI_License.pdf",
+    "document_id": "808bf68744b631b4f4eb9fc5ee290c66"
+  },
+  {
+    "title": "Ingredient List",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Ingredient_List.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Ingredient_List.pdf",
+    "document_id": "c3fc3b2c9c712c19444049185cca8029"
+  },
+  {
+    "title": "Nutritional Info",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Nutritional_Info.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Nutritional_Info.pdf",
+    "document_id": "4f788b4d55e9ad3e6efc588a07eb778c"
+  },
+  {
+    "title": "Product Label",
+    "date": "2025-08-17",
+    "source": "LOCAL",
+    "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Product_Label.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Product_Label.pdf",
+    "document_id": "8182988956f8909bcb16471529d06f7d"
   }
 ]

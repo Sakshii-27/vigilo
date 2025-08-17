@@ -1,0 +1,31 @@
+{
+  "company_info": {
+    "company_name": "BrewHaven",
+    "address": "Test Address",
+    "fssai_license": "12345",
+    "fssai_validity": "2025-08-17",
+    "business_type": "",
+    "gst_number": null,
+    "incorporation_number": null
+  },
+  "legal_documents": [],
+  "products": [
+    {
+      "product_name": "Default Product",
+      "category": "general",
+      "ingredients": {},
+      "nutritional_info": {},
+      "allergens": [],
+      "batch_number": null
+    }
+  ],
+  "packaging": [
+    {
+      "label_front_url": "",
+      "label_back_url": "",
+      "expiry_format": "DD/MM/YYYY",
+      "packaging_claims": []
+    }
+  ],
+  "optional_data": null
+}
