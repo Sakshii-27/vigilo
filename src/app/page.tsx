@@ -79,7 +79,7 @@ const DataPulse = ({ top, left, delay }: DataPulseProps) => (
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white overflow-hidden">
+<div className="min-h-screen bg-[#000030] text-white overflow-hidden">
       {/* Animated Background Grid */}
       <div className="fixed inset-0 opacity-10">
         <div className="absolute inset-0" style={{
@@ -289,7 +289,7 @@ const DataPulse = ({ top, left, delay }: DataPulseProps) => (
 
       {/* Video Modal */}
       {isVideoModalOpen && (
-        <div className="fixed inset-0 bg-blue/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 rounded-2xl border border-emerald-500/30 max-w-4xl w-full">
             <div className="flex justify-between items-center p-6 border-b border-gray-800">
               <h3 className="text-2xl font-bold text-white">Vigilo Demo</h3>
