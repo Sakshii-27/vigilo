@@ -91,7 +91,8 @@ async def submit_company_data(
 ):
     # Save uploaded files
     def save_file(file: UploadFile) -> str:
-        upload_dir = "data/uploads"
+        base_dir = os.path.dirname(__file__)
+        upload_dir = os.path.join(base_dir, "data", "uploads")
         os.makedirs(upload_dir, exist_ok=True)
         path = os.path.join(upload_dir, f"{hashlib.md5(file.filename.encode()).hexdigest()}_{file.filename}")
         with open(path, 'wb') as f:
@@ -164,12 +165,46 @@ async def check_company_compliance(company_id: str):
     """Endpoint triggering the full analysis pipeline"""
     try:
         analysis = analyze_amendments_for_company(company_id)
-        return {
-            "status": "success",
-            "analysis": analysis
-        }
+        return {"status": "success", "analysis": analysis}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Fallback: return a minimal analysis using raw amendments without LLM
+        try:
+            amendments = get_latest_amendments(limit=5)
+            company = get_company_info(company_id) or {"name": company_id}
+            # naive summaries
+            detailed = []
+            for a in amendments:
+                content = a.get("content", "")
+                summary = (content[:400] + "...") if len(content) > 400 else content
+                detailed.append({
+                    "title": a.get("title", "Amendment"),
+                    "date": a.get("date", ""),
+                    "summary": summary,
+                    "actions": [
+                        "Review amendment text",
+                        "Assess applicability to your products/processes",
+                        "Update SOP/labels if required"
+                    ]
+                })
+            fallback = {
+                "analysis_steps": [
+                    {"stage": "fallback", "note": f"LLM unavailable: {str(e)}"}
+                ],
+                "initial_amendments": len(amendments),
+                "relevant_amendments": len(detailed),
+                "compliance_plan": {
+                    "status": "partial",
+                    "notes": "LLM analysis unavailable; provided heuristic summaries",
+                    "next_steps": [
+                        "Enable GROQ_API_KEY and rerun for detailed plan",
+                        "Manually validate listed actions"
+                    ]
+                },
+                "detailed_amendments": detailed
+            }
+            return {"status": "success", "analysis": fallback}
+        except Exception as inner:
+            raise HTTPException(status_code=400, detail=f"Compliance check failed: {inner}")
 
 def analyze_amendments_for_company(company_id: str) -> Dict:
     """Run the full prompt chain against latest amendments and company data"""

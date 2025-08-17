@@ -19,10 +19,10 @@ API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=API_KEY) if API_KEY else None
 
 # Model Configuration
-MODEL_ANALYSIS = "mixtral-8x7b-32768"  # For initial amendment analysis
-MODEL_DETAILS = "llama3-70b-8192"      # For company-specific analysis
-MODEL_COMPLIANCE = "gemma-7b-it"       # For detailed compliance checks
-MODEL_OPTIMIZE = "mixtral-8x7b-32768"  # For final optimization
+MODEL_ANALYSIS = "deepseek-r1-distill-llama-70b"  # For initial amendment analysis
+MODEL_DETAILS = "openai/gpt-oss-120b"      # For company-specific analysis
+MODEL_COMPLIANCE = "openai/gpt-oss-120b"       # For detailed compliance checks
+MODEL_OPTIMIZE = "meta-llama/llama-prompt-guard-2-22m"  # For final optimization
 
 class AmendmentAnalyzer:
     def __init__(self):
@@ -107,13 +107,24 @@ class AmendmentAnalyzer:
 
         response = self.call_groq(prompt, MODEL_ANALYSIS)
         self.log_stage("STAGE 1", "Received amendment analysis")
-        try:
-            result = json.loads(response)
-            self.current_amendments = result["amendments"]
-            return result["amendments"]
-        except json.JSONDecodeError:
-            self.log_stage("ERROR", "Failed to parse amendment analysis JSON")
-            raise
+        # Try robust JSON parsing with extraction and a single retry
+        parsed = self._parse_model_json(response, prompt, MODEL_ANALYSIS)
+        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
+            self.current_amendments = parsed["amendments"]
+            return parsed["amendments"]
+        # Fallback to deterministic local summaries if parsing failed
+        self.log_stage("WARN", "Falling back to local amendment summaries due to parse failure")
+        summaries = []
+        for a in amendments[:5]:
+            summaries.append({
+                "title": a.get("title", "Untitled"),
+                "summary": (a.get("content", "")[:200] + '...') if a.get("content") else a.get("title", ""),
+                "requirements": [],
+                "affected_businesses": [],
+                "impact": "Medium"
+            })
+        self.current_amendments = summaries
+        return summaries
 
     def filter_by_company_profile(self, company_data: Dict) -> List[Dict]:
         """Stage 2: Filter amendments relevant to company's basic profile"""
@@ -153,14 +164,13 @@ class AmendmentAnalyzer:
             return filtered
 
         response = self.call_groq(prompt, MODEL_DETAILS)
-        self.log_stage("STAGE 2", f"Filtered to {len(json.loads(response)['amendments'])} potentially relevant amendments")
-        try:
-            result = json.loads(response)
-            self.current_amendments = result["amendments"]
-            return result["amendments"]
-        except json.JSONDecodeError:
-            self.log_stage("ERROR", "Failed to parse company filter JSON")
-            raise
+        self.log_stage("STAGE 2", "Received company filter response")
+        parsed = self._parse_model_json(response, prompt, MODEL_DETAILS)
+        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
+            self.current_amendments = parsed["amendments"]
+            return parsed["amendments"]
+        self.log_stage("WARN", "Company filter parse failed; returning current amendments as-is")
+        return self.current_amendments
 
     def check_product_compliance(self, products: List[Dict]) -> List[Dict]:
         """Stage 3: Check amendments against product details"""
@@ -216,14 +226,13 @@ class AmendmentAnalyzer:
             return product_checked
 
         response = self.call_groq(prompt, MODEL_COMPLIANCE, temperature=0.5)
-        self.log_stage("STAGE 3", "Processed product-level impacts")
-        try:
-            result = json.loads(response)
-            self.current_amendments = result["amendments"]
-            return result["amendments"]
-        except json.JSONDecodeError:
-            self.log_stage("ERROR", "Failed to parse product compliance JSON")
-            raise
+        self.log_stage("STAGE 3", "Received product compliance response")
+        parsed = self._parse_model_json(response, prompt, MODEL_COMPLIANCE)
+        if parsed and isinstance(parsed, dict) and parsed.get("amendments"):
+            self.current_amendments = parsed["amendments"]
+            return parsed["amendments"]
+        self.log_stage("WARN", "Product compliance parse failed; returning current amendments as-is")
+        return self.current_amendments
 
     def generate_compliance_plan(self) -> Dict:
         """Stage 4: Generate final compliance action plan"""
@@ -298,12 +307,73 @@ class AmendmentAnalyzer:
             return plan
 
         response = self.call_groq(prompt, MODEL_OPTIMIZE)
-        self.log_stage("STAGE 4", "Generated final compliance plan")
+        self.log_stage("STAGE 4", "Received final compliance plan response")
+        parsed = self._parse_model_json(response, prompt, MODEL_OPTIMIZE)
+        if parsed and isinstance(parsed, dict):
+            return parsed
+        self.log_stage("WARN", "Compliance plan parse failed; returning minimal plan")
+        return {"compliance_plan": {"status": "partial", "notes": "Parsing failed"}}
+
+    def _extract_json_from_text(self, text: str) -> Optional[str]:
+        """Extract the first JSON object from arbitrary text by matching braces."""
+        if not text or '{' not in text:
+            return None
+        start = text.find('{')
+        depth = 0
+        for i in range(start, len(text)):
+            ch = text[i]
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start:i+1]
+                    return candidate
+        return None
+
+    def _parse_model_json(self, response_text: str, original_prompt: str, model: str) -> Optional[Dict]:
+        """Attempt to parse JSON from model response robustly; retry once with a stricter instruction if needed."""
+        # 1) Direct parse
         try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            self.log_stage("ERROR", "Failed to parse compliance plan JSON")
-            raise
+            return json.loads(response_text)
+        except Exception:
+            pass
+
+        # 2) Strip common markdown/code fences and try again
+        cleaned = response_text.strip()
+        if cleaned.startswith('```') and cleaned.endswith('```'):
+            cleaned = '\n'.join(cleaned.split('\n')[1:-1]).strip()
+            try:
+                return json.loads(cleaned)
+            except Exception:
+                pass
+
+        # 3) Extract first JSON object substring
+        try:
+            candidate = self._extract_json_from_text(response_text)
+            if candidate:
+                return json.loads(candidate)
+        except Exception:
+            pass
+
+        # 4) Retry once with an explicit instruction to return only JSON
+        try:
+            retry_prompt = original_prompt + "\n\nIMPORTANT: Respond ONLY with the valid JSON object that matches the schema above, and nothing else."
+            retry_resp = self.call_groq(retry_prompt, model)
+            # try same parsing steps on retry_resp
+            try:
+                return json.loads(retry_resp)
+            except Exception:
+                # try extraction
+                cand = self._extract_json_from_text(retry_resp)
+                if cand:
+                    return json.loads(cand)
+        except Exception as e:
+            self.log_stage("ERROR", f"Retry parse attempt failed: {e}")
+
+        # 5) Log the raw response for debugging
+        self.log_stage("DEBUG", f"Raw model response (non-JSON): {response_text[:1000]}")
+        return None
 
     def run_full_analysis(
         self, 
