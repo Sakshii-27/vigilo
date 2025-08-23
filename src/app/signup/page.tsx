@@ -579,7 +579,7 @@ const SuccessPage = ({
               <button 
               onClick={() => {
                 // Navigate to the dashboard route instead of calling setCurrentPage with an invalid value
-                window.location.href = '/trashboard';
+                window.location.href = '/dashboard';
                 resetForms();
                 setSuccessMessage('');
               }}

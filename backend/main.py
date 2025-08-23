@@ -21,6 +21,7 @@ from datetime import date
 import hashlib
 import json
 import os
+from fastapi.responses import FileResponse
 from prompt_chain import AmendmentAnalyzer
 
 app = FastAPI(title="Vigilo FSSAI Compliance API")
@@ -229,6 +230,30 @@ def analyze_amendments_for_company(company_id: str) -> Dict:
         products=products[:4] if products else []
     )
     return results
+
+@app.get("/pdf")
+def get_pdf(document_id: str):
+    """Return PDF file for a given document_id from metadata store."""
+    try:
+        meta = get_metadata_store()
+        match = next((m for m in meta if (m.get("document_id") == document_id)), None)
+        if not match:
+            raise HTTPException(status_code=404, detail="Document not found")
+        path = match.get("pdf_path")
+        if not path:
+            raise HTTPException(status_code=404, detail="PDF file not found")
+        # Resolve relative paths against backend directory
+        if not os.path.isabs(path):
+            base_dir = os.path.dirname(__file__)
+            path = os.path.join(base_dir, path)
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="PDF file not found")
+        fname = os.path.basename(path)
+        return FileResponse(path, media_type="application/pdf", filename=fname)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving PDF: {e}")
 
 if __name__ == "__main__":
     import uvicorn
