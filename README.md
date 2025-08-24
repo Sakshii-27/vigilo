@@ -106,7 +106,4 @@ npm install
 # Run development server
 npm run dev
 
----
-✨ Stop stressing. *Start trusting Vigilo.*
-Your compliance, simplified.
 ```
