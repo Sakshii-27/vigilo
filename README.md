@@ -5,13 +5,13 @@
 **Tired of drowning in endless paperwork and chasing compliance deadlines?**  
 Vigilo is here to change that. No more missed deadlines. No surprise penalties. Just seamless, automated compliance.
 
-Vigilo is an agentic AI compliance assistant that continuously monitors official regulatory sources (e.g., FSSAI, SEBI, IT Acts) and draft bills, interprets changes in plain language, and maps them to your company’s real context using RAG and vector matching. It generates clear action items and checklists, triggers automated workflows via your existing systems (ERP/HR/Finance/Email/Slack), and maintains an audit-ready evidence trail. A customizable dashboard highlights risk, impact, and deadlines so teams catch changes early and stay compliant in real time.
+Vigilo is an agentic AI compliance assistant that continuously monitors official regulatory sources (e.g., FSSAI, SEBI, IT Acts) and draft bills, interprets changes in plain language, and maps them to your company’s real context using RAG and vector matching. It generates clear action items and checklists, triggers automated workflows via your existing systems, and maintains an audit-ready evidence trail. A customizable dashboard highlights risk, impact, and deadlines so teams catch changes early and stay compliant in real time.
 
 ## Key Features
 
 1. **Proactive Regulation Scanning**
 
-   - Monitors government portals, draft bills, and regulatory bodies (India & global).
+   - Vigilo monitors portals like RBI, SEBI, FSSAI, IRDAI, and more — delivering real-time, company-specific compliance updates from draft bills and regulatory bodies.
    - Notifies companies of upcoming changes before enforcement deadlines.
 
 2. **AI-Powered Summarisation & Interpretation**
@@ -22,11 +22,10 @@ Vigilo is an agentic AI compliance assistant that continuously monitors official
 3. **Automated Compliance Actions**
 
    - Smart workflows trigger tasks, checklists, or policy updates automatically.
-   - Integrates with ERP, HR, and finance tools for seamless execution.
 
 4. **Customisable Regulatory Dashboard**
 
-   - Sector-specific filters (finance, healthcare, pharma, legal, etc.).
+   - Sector-specific filters (finance, marketing, sales, legal, etc.).
    - Risk-level indicators (High / Medium / Low urgency).
 
 5. **Audit-Ready Compliance Logs**
@@ -35,34 +34,29 @@ Vigilo is an agentic AI compliance assistant that continuously monitors official
 
 ## Technical Workflow – How Vigilo Works
 
-1. **Ingest & Classify**
+1. **Industry Selection & Ingestion**
 
-   - AI scans company data (policies, contracts, product designs).
-   - Classifies by domain (Food, IT, Pharma, etc.).
+   - User selects their industry (Finance, Food, Pharma, IT, etc.).
+   - Based on this, Vigilo shows the required regulators and compliance documents.
 
 2. **Amendment Intelligence**
 
-   - Continuously fetches latest regulations (FSSAI, SEBI, IT Acts).
-   - Uses **RAG + LangChain** to analyze and summarize updates.
+   - Continuously web-scrapes official portals (e.g., FSSAI for food, SEBI for finance, IT Acts for tech) and fetches only industry-relevant regulations based on the company profile.
+   - Stores updates as vector embeddings; RAG later retrieves the most relevant context for analysis and summaries.
 
-3. **Vector Matching & Relevance Check**
+3. **Relevance Check**
 
-   - Embeds company data into a vector database.
    - Cross-matches amendments against policies, product designs, and labels to detect non-compliance risks.
 
 4. **Layered AI Analysis (Prompt Chain)**
 
-   - **AI-1**: Product design & labeling compliance.
-   - **AI-2**: Legal contracts & policy compliance.
-   - **AI-3**: Operational / HR / Finance compliance.
-   - Each stage flags gaps and feeds results into the next.
+- Model 1: Retrieves the latest amendments from the vector DB, breaks down large PDFs into chunks, and summarizes them.
+- Model 2: Analyzes company profile, category, and workflows → filters amendments that might impact the company.
+- Model 3–5: Examines different company documents (labels, ads, HR files, contracts, etc.) to check compliance with the filtered amendments. Number of models depends on document types provided.
+- Model 6: Aggregates insights and generates a comprehensive compliance report, highlighting required actions, deadlines, and risks.
+- Reports are delivered to the frontend via FastAPI, displayed in a clear dashboard for easy decision-making.
 
-5. **Roadmap Generator**
-
-   - Produces a compliance report with actions, deadlines, and penalties avoided.
-   - Powered by **LangGraph reasoning**.
-
-6. **Proactive Alerts**
+5. **Proactive Alerts**
    - Real-time notifications via **MCP + Gmail API**.
    - Ensures no compliance deadlines are missed.
 
@@ -74,19 +68,16 @@ Vigilo is an agentic AI compliance assistant that continuously monitors official
 - **RAG**: Vector DBs (FAISS, Chroma) – Retrieve regulations & insights
 - **MCP (Model Context Protocol)** – Bridge to APIs & notifications
 - **LangChain / AutoGen** – Multi-agent orchestration
-- **NLP Pipelines**: spaCy, Hugging Face Transformers – Rule/entity extraction
 
 ### 2. Backend & Processing
 
 - Python / Node.js – Core logic & API integration
 - FastAPI – Lightweight backend
-- Celery / Airflow – Scheduling scans & checks
 
 ### 3. Data Sources & Integration
 
-- Government portals (APIs / scraping) – Real-time regulatory updates
+- Government portals (web scraping) – Real-time regulatory updates
 - Firebase – Compliance history & audit logs
-- ERP / CRM / Slack / Email APIs – Compliance alerts to teams
 
 ### 4. Frontend & UX
 
@@ -106,7 +97,18 @@ npm install
 # Run development server
 npm run dev
 
----
-✨ Stop stressing. *Start trusting Vigilo.*
-Your compliance, simplified.
+# Backend setup
+cd backend
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# Start FastAPI server
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Add the following to .env.local (in the root directory)
+GROQ_API_KEY=your-api-key
+CHROMA_DIR=./chroma_db
+NEXT_PUBLIC_URL=http://localhost:8000
+
 ```
