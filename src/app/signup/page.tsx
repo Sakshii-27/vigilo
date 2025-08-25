@@ -579,13 +579,13 @@ const SuccessPage = ({
               <button 
               onClick={() => {
                 // Navigate to the dashboard route instead of calling setCurrentPage with an invalid value
-                window.location.href = '/trashboard';
+                window.location.href = '/uploaddocs';
                 resetForms();
                 setSuccessMessage('');
               }}
               className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
               >
-                Go to Dashboard
+                Upload Documents
               </button>
             )}
             

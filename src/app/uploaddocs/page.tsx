@@ -482,8 +482,10 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
               >
                 Start New Application
               </button>
-              <button className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors">
-                Track Application
+              <button
+                onClick={() => window.location.href = "/trashboard"}
+                 className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors">
+                Go to Dashboard
               </button>
             </div>
 
