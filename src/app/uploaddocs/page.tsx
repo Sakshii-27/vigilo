@@ -837,6 +837,12 @@ SubmitComponentProps) => {
       if (audit) fd.append("audit_file", audit);
       if (lab) fd.append("lab_report_file", lab);
 
+      // Additional product documents (PDFs)
+      const ingredientsDoc = fileOrNull(uploadedFiles["ingredients"]);
+      const nutritionDoc = fileOrNull(uploadedFiles["nutrition"]);
+      if (ingredientsDoc) fd.append("ingredients_file", ingredientsDoc);
+      if (nutritionDoc) fd.append("nutrition_file", nutritionDoc);
+
       const submitRes = await fetch(`${API_BASE}/company/submit`, {
         method: "POST",
         body: fd,
