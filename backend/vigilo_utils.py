@@ -454,3 +454,28 @@ def save_company_json(company_data: CompanyData):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write(company_data.model_dump_json(indent=2))
+
+def get_latest_company_id() -> Optional[str]:
+    """Return the company_id (filename without .json) of the most recently modified company file.
+    If none found, return None.
+    """
+    companies_dir = os.path.join(DATA_DIR, "companies")
+    if not os.path.isdir(companies_dir):
+        return None
+    latest_id: Optional[str] = None
+    latest_mtime: float = -1.0
+    try:
+        for fname in os.listdir(companies_dir):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(companies_dir, fname)
+            try:
+                mtime = os.path.getmtime(fpath)
+                if mtime > latest_mtime:
+                    latest_mtime = mtime
+                    latest_id = os.path.splitext(fname)[0]
+            except Exception:
+                continue
+        return latest_id
+    except Exception:
+        return None
