@@ -837,11 +837,11 @@ SubmitComponentProps) => {
       if (audit) fd.append("audit_file", audit);
       if (lab) fd.append("lab_report_file", lab);
 
-      // Additional product documents (PDFs)
-      const ingredientsDoc = fileOrNull(uploadedFiles["ingredients"]);
-      const nutritionDoc = fileOrNull(uploadedFiles["nutrition"]);
-      if (ingredientsDoc) fd.append("ingredients_file", ingredientsDoc);
-      if (nutritionDoc) fd.append("nutrition_file", nutritionDoc);
+            // Additional product documents (PDFs)
+            const ingredientsDoc = fileOrNull(uploadedFiles["ingredients"]);
+            const nutritionDoc = fileOrNull(uploadedFiles["nutrition"]);
+            if (ingredientsDoc) fd.append("ingredients_file", ingredientsDoc);
+            if (nutritionDoc) fd.append("nutrition_file", nutritionDoc);
 
       const submitRes = await fetch(`${API_BASE}/company/submit`, {
         method: "POST",
@@ -939,7 +939,13 @@ SubmitComponentProps) => {
                 Start New Application
               </button>
               <button
-                onClick={() => (window.location.href = "/dashboard")}
+                onClick={() => {
+                  if (selectedCategory === "finance") {
+                    window.location.href = "/rbidashboard";
+                  } else {
+                    window.location.href = "/dashboard";
+                  }
+                }}
                 className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors"
               >
                 Go to Dashboard
