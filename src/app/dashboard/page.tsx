@@ -2,6 +2,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { TestTube, Bell, Settings, Calendar, FileText, ChevronRight, AlertTriangle, CheckCircle, X, Filter, Search } from 'lucide-react';
 
+// Expose backend base for client links (safe in client bundle)
+const FRONT_API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5005';
+
 type CompliancePlan = {
   timeline?: {
     timeframe: string;
@@ -29,6 +32,134 @@ type CompliancePlan = {
   notes?: string;
   next_steps?: string[];
 };
+// Hardcoded Chicory Labels Compliance Card (always shown at top)
+const ChicoryLabelsCard = () => (
+  <div className="bg-gradient-to-b from-gray-900 to-gray-950 border border-gray-800 rounded-xl p-6 relative overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(600px 200px at 10% -10%, rgba(16,185,129,0.08), transparent)' }} />
+    <div className="flex items-center justify-between mb-4 relative">
+      <h2 className="text-xl font-semibold text-white">Critical Packaging: Chicory Label Compliance</h2>
+      <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300">Critical</span>
+    </div>
+    <p className="text-sm text-gray-300 mb-4">Front-panel declaration for coffee-chicory blends is mandatory. The current label fails to prominently disclose the blend and percentage breakdown. Immediate artwork correction is required.</p>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <div className="text-xs text-gray-500 mb-2">Current Label</div>
+        <img src="/current-label.png" alt="Current label" className="rounded border border-gray-700 w-full h-auto" />
+        <ul className="mt-3 space-y-1 text-xs text-red-400">
+          <li className="flex gap-1"><X className="h-3 w-3 mt-0.5" /> Missing mandatory declaration</li>
+          <li className="flex gap-1"><X className="h-3 w-3 mt-0.5" /> No percentage of coffee vs. chicory</li>
+          <li className="flex gap-1"><X className="h-3 w-3 mt-0.5" /> Font size and contrast inadequate</li>
+        </ul>
+      </div>
+      <div>
+        <div className="text-xs text-gray-500 mb-2">Required Label</div>
+        <img src="/required-label.png" alt="Required label" className="rounded border border-gray-700 w-full h-auto" />
+        <ul className="mt-3 space-y-1 text-xs text-emerald-400">
+          <li className="flex gap-1"><CheckCircle className="h-3 w-3 mt-0.5" /> “COFFEE BLENDED WITH CHICORY” on front panel</li>
+          <li className="flex gap-1"><CheckCircle className="h-3 w-3 mt-0.5" /> Percentage breakdown clearly stated</li>
+          <li className="flex gap-1"><CheckCircle className="h-3 w-3 mt-0.5" /> Minimum 3mm font, high contrast</li>
+        </ul>
+      </div>
+    </div>
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-sm">
+        <div className="text-red-300 text-xs mb-1">Risk</div>
+        Misbranding and consumer deception; potential recall exposure.
+      </div>
+      <div className="p-3 rounded bg-yellow-500/10 border border-yellow-500/20 text-sm">
+        <div className="text-yellow-300 text-xs mb-1">Immediate Actions</div>
+        Update artwork, add declaration & percentages, route for regulatory sign-off.
+      </div>
+      <div className="p-3 rounded bg-emerald-500/10 border border-emerald-500/20 text-sm">
+        <div className="text-emerald-300 text-xs mb-1">Outcome</div>
+        Clear consumer information; robust compliance posture for packaging audits.
+      </div>
+    </div>
+  </div>
+);
+
+  // Helpers
+  const safeFormatDate = (d?: string) => {
+    if (!d || d === 'Unknown') return 'Unknown';
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return d; // show raw if not ISO
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Detailed finding card from Stage 5 by_amendment
+  const FindingCard = ({ finding }: { finding: any }) => (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="text-lg font-semibold text-white">{finding.amendment_title}</h3>
+        <div className="flex items-center gap-2">
+          {finding.last_date && (
+            <span className="px-2 py-0.5 text-xs bg-gray-800 text-gray-300 rounded flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> {safeFormatDate(finding.last_date)}
+            </span>
+          )}
+          {!finding.last_date && finding.deadline_text && (
+            <span className="px-2 py-0.5 text-xs bg-gray-800 text-gray-300 rounded flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> {finding.deadline_text}
+            </span>
+          )}
+          {finding.urgency && (
+            <span className={`px-2 py-0.5 text-xs rounded ${
+              finding.urgency === 'Critical' ? 'bg-red-500/20 text-red-300' :
+              finding.urgency === 'High' ? 'bg-yellow-500/20 text-yellow-300' :
+              'bg-gray-700 text-gray-300'
+            }`}>
+              {finding.urgency}
+            </span>
+          )}
+        </div>
+      </div>
+      {finding.current_state && (
+        <p className="text-sm text-gray-300 mb-4">{finding.current_state}</p>
+      )}
+      {finding.evidence?.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs text-gray-400 mb-2">EVIDENCE</div>
+          <ul className="space-y-2">
+            {finding.evidence.map((e: string, i: number) => (
+              <li key={i} className="text-sm text-gray-300">“{e}”</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {finding.gaps?.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs text-gray-400 mb-2">GAPS</div>
+          <ul className="space-y-1.5">
+            {finding.gaps.map((g: string, i: number) => (
+              <li key={i} className="text-sm text-gray-300 flex gap-2"><span className="text-gray-600">•</span>{g}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {finding.actions?.length > 0 && (
+        <div>
+          <div className="text-xs text-gray-400 mb-2">ACTIONS TO COMPLY</div>
+          <ul className="space-y-1.5">
+            {finding.actions.map((a: string, i: number) => (
+              <li key={i} className="text-sm text-gray-300 flex gap-2"><span className="text-gray-600">•</span>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(finding.document_id || finding.pdf_url) && (
+        <div className="mt-4">
+          <a
+            href={finding.pdf_url || `${FRONT_API_BASE}/pdf?document_id=${encodeURIComponent(finding.document_id)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            <FileText className="h-4 w-4" /> View full regulation document
+          </a>
+        </div>
+      )}
+    </div>
+  );
 
 type Analysis = {
   analysis_steps?: Record<string, string[]>;
@@ -36,6 +167,7 @@ type Analysis = {
   relevant_amendments?: number;
   compliance_plan?: CompliancePlan;
   detailed_amendments?: any[];
+  findings?: any[]; // from Stage 5 by_amendment with full details
 };
 
 type MetaItem = {
@@ -48,7 +180,7 @@ type MetaItem = {
 };
 
 export default function DashboardPage() {
-  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5005';
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +194,7 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState<{id: string; message: string; type: 'alert' | 'update'}[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Initializing compliance dashboard...");
+  const [selectedTimeline, setSelectedTimeline] = useState<{timeframe: string; actions: any[]} | null>(null);
 
   // Load company ID and initial data
   useEffect(() => {
@@ -153,16 +286,12 @@ export default function DashboardPage() {
   }, [amendments, searchTerm, filter]);
 
   const runCompliance = useCallback(async () => {
-    if (!companyId) {
-      setError('Please submit your company details first from the Upload Docs page.');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setAnalysis(null);
     setActiveStep(-1);
 
+    // Step ticker: keep animating steps while the backend runs
     const steps = [
       'Analyzing latest FSSAI amendments...',
       'Cross-referencing with your product portfolio...',
@@ -170,228 +299,173 @@ export default function DashboardPage() {
       'Assessing required documentation updates...',
       'Generating actionable compliance plan...'
     ];
-
-    const logs: Record<string, string[]> = {};
-    const pushLog = (stage: string, msg: string) => {
-      const t = new Date().toISOString().replace('T', ' ').slice(0, 19);
-      logs[stage] = [...(logs[stage] || []), `[${t}] ${msg}`];
-    };
-
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let stepIndex = 0;
+    setActiveStep(stepIndex);
+    setProgress(steps[stepIndex]);
+    const stepTimer = setInterval(() => {
+      stepIndex = (stepIndex + 1) % steps.length;
+      setActiveStep(stepIndex);
+      setProgress(steps[stepIndex]);
+    }, 1800);
 
     try {
-      // Simulate each step with progress updates
-      for (let i = 0; i < steps.length; i++) {
-        setActiveStep(i);
-        setProgress(steps[i]);
-        pushLog(`Stage ${i + 1}`, steps[i]);
-        
-        // Simulate different processing times for each step
-        await sleep(i === 0 ? 2200 : i === 1 ? 1800 : i === 2 ? 3000 : 2500);
-        
-        // Add detailed logs for each step
-        if (i === 0) {
-          pushLog(`Stage ${i + 1}`, "Identified 5 new amendments from FSSAI");
-          pushLog(`Stage ${i + 1}`, "Extracted key requirements from each regulation");
-        } else if (i === 1) {
-          pushLog(`Stage ${i + 1}`, "Matched 3 products against new regulations");
-          pushLog(`Stage ${i + 1}`, "Found 2 potential compliance gaps");
-        } else if (i === 2) {
-          pushLog(`Stage ${i + 1}`, "Analyzed 5 packaging designs");
-          pushLog(`Stage ${i + 1}`, "Identified 3 label updates needed");
-        } else if (i === 3) {
-          pushLog(`Stage ${i + 1}`, "Verified 8 compliance documents");
-          pushLog(`Stage ${i + 1}`, "2 documents require updates");
-        }
+      // Get latest company if not present
+      let cid = companyId;
+      if (!cid) {
+        const res = await fetch(`${API_BASE}/company/latest`);
+        if (!res.ok) throw new Error('No latest company found. Please submit your company details first.');
+        const latest = await res.json();
+        cid = latest.company_id as string;
+        setCompanyId(cid);
+        try { localStorage.setItem('company_id', cid); } catch {}
       }
 
-      // Generate realistic compliance analysis
-      const coffeeAmendment = amendments.find(a => a.title.includes('Coffee') || a.title.includes('Chicory'));
-      const packagingAmendment = amendments.find(a => a.title.includes('Packaging'));
-      const labelingAmendment = amendments.find(a => a.title.includes('Label'));
+      // Run real compliance chain
+      const runRes = await fetch(`${API_BASE}/compliance/check?company_id=${encodeURIComponent(cid!)}`);
+      if (!runRes.ok) {
+        const err = await runRes.json().catch(() => ({}));
+        throw new Error(err?.detail || 'Compliance check failed');
+      }
+      const payload = await runRes.json();
+      const result = payload.result;
 
-      const detailedAmendments = [
-        {
-          title: coffeeAmendment?.title || "FSSAI (Coffee Products) Amendment 2025",
-          date: coffeeAmendment?.date || "2025-08-15",
-          summary: "New labeling requirements for coffee-chicory mixtures including mandatory front-of-pack declarations in specific font sizes.",
-          requirements: [
-            "Clear declaration of 'COFFEE BLENDED WITH CHICORY' on primary display panel",
-            "Minimum font size of 3mm for the declaration",
-            "Contrast ratio of at least 4.5:1 for the text",
-            "Prohibition of misleading imagery"
-          ],
-          relevance_reason: "Applies to your coffee product line (Classic Coffee Blend, Instant Coffee Sachets)",
-          product_impacts: [
-            {
-              product_name: "Classic Coffee Blend 200g",
-              affected_aspects: ["labeling", "packaging design"],
-              required_changes: [
-                "Update front panel design to include declaration",
-                "Verify font size meets requirements",
-                "Submit new artwork for approval"
-              ]
-            },
-            {
-              product_name: "Instant Coffee Sachets",
-              affected_aspects: ["labeling"],
-              required_changes: [
-                "Add declaration to primary display area",
-                "Ensure contrast ratio compliance"
-              ]
-            }
-          ],
-          document_id: coffeeAmendment?.document_id
-        },
-        {
-          title: packagingAmendment?.title || "FSSAI (Packaging Materials) Amendment 2025",
-          date: packagingAmendment?.date || "2025-07-28",
-          summary: "Updated standards for recycled plastics in food contact materials with new migration limits.",
-          requirements: [
-            "Certification required for recycled PET usage",
-            "Migration testing for specific compounds",
-            "Supplier documentation updates",
-            "New batch testing requirements"
-          ],
-          relevance_reason: "Your products use PET packaging for 3 SKUs",
-          product_impacts: [
-            {
-              product_name: "All PET-packaged products",
-              affected_aspects: ["packaging materials", "supplier compliance"],
-              required_changes: [
-                "Obtain new material certifications from suppliers",
-                "Conduct migration testing on next production batch",
-                "Update technical documentation"
-              ]
-            }
-          ],
-          document_id: packagingAmendment?.document_id
+      // Map backend Stage 5 report to UI model
+      const report = result?.final_report?.compliance_report || {};
+      const byAmendment = (report.by_amendment || []) as any[];
+      const prioritized = (report.prioritized_actions || []) as any[];
+
+      // Build timeline sections: prefer backend-provided consolidated timeline if available
+      const reportTimeline = (report.timeline || []) as any[];
+      let timelineSections: { timeframe: string; actions: any[] }[] = [];
+      if (Array.isArray(reportTimeline) && reportTimeline.length) {
+        timelineSections = reportTimeline.map((slot: any) => ({
+          timeframe: slot.timeframe || 'Upcoming',
+          actions: (slot.actions || []).map((a: any) => ({
+            department: a.department || 'General',
+            task: a.task || 'Action',
+            steps: a.steps,
+            urgency: a.urgency,
+            amendments: a.amendments,
+            deadline: a.due || a.deadline || a.last_date || 'Unknown',
+          }))
+        })).filter(s => s.actions.length > 0);
+      } else {
+        // Fallback to building from prioritized actions
+        const timelineActions = prioritized.map((a: any) => ({
+          department: a.department || 'General',
+          task: a.task || 'Action',
+          steps: undefined,
+          urgency: a.urgency,
+          amendments: undefined,
+          deadline: a.due || 'Unknown'
+        }));
+
+        // Preserve chicory label comparison if relevant
+        const hasChicory = byAmendment.some(a => (a.amendment_title || '').toLowerCase().includes('chicory') || (a.amendment_title || '').toLowerCase().includes('coffee'));
+        if (hasChicory) {
+          timelineActions.unshift({
+            department: 'Packaging Design',
+            task: 'Update coffee product labels for chicory declaration',
+            steps: [
+              'Update front panel layout with mandatory declaration',
+              'Verify minimum font size and contrast',
+              'Route artwork for regulatory approval'
+            ],
+            urgency: 'Critical',
+            amendments: [
+              byAmendment.find(a => (a.amendment_title || '').toLowerCase().includes('chicory') || (a.amendment_title || '').toLowerCase().includes('coffee'))?.amendment_title || 'Coffee/Chicory Labeling'
+            ],
+            deadline: 'Unknown',
+            currentLabel: '/current-label.png',
+            requiredLabel: '/required-label.png',
+            labelRequirements: [
+              "Show 'COFFEE BLENDED WITH CHICORY' prominently",
+              'Include percentage breakdown of coffee/chicory',
+              'Minimum 3mm font size for declaration',
+              'High contrast text for readability'
+            ],
+            currentIssues: [
+              'Missing mandatory declaration text',
+              'No percentage breakdown shown',
+              'Imagery could be misleading about contents'
+            ],
+            productComposition: undefined
+          } as any);
         }
-      ];
+
+        timelineSections = [
+          { timeframe: 'Immediate (1-2 weeks)', actions: timelineActions.slice(0, Math.min(3, timelineActions.length)) },
+          { timeframe: 'Short-term (3-4 weeks)', actions: timelineActions.slice(3, 6) },
+          { timeframe: 'Ongoing', actions: timelineActions.slice(6) }
+        ].filter(slot => slot.actions.length > 0);
+      }
 
       const compliancePlan: CompliancePlan = {
-        timeline: [
-          {
-            timeframe: "Urgent (1-2 weeks)",
-            actions: [
-              {
-                department: "Packaging Design",
-                task: "Update coffee product labels for new declaration",
-                steps: [
-                  "Work with design team on new layout",
-                  "Verify font size and contrast",
-                  "Submit to regulatory for approval"
-                ],
-                urgency: "Critical",
-                amendments: [detailedAmendments[0].title],
-                deadline: "2025-09-01",
-                currentLabel: "/current-label.png",
-                requiredLabel: "/required-label.png",
-                labelRequirements: [
-                  "Must show 'COFFEE BLENDED WITH CHICORY' prominently",
-                  "Must include percentage breakdown of coffee/chicory",
-                  "Minimum 3mm font size for declaration",
-                  "High contrast text for readability"
-                ],
-                currentIssues: [
-                  "Missing mandatory declaration text",
-                  "No percentage breakdown shown",
-                  "Imagery could be misleading about contents"
-                ]
-              },
-              {
-                department: "Quality Assurance",
-                task: "Implement new packaging material checks",
-                steps: [
-                  "Update incoming material inspection checklist",
-                  "Train staff on new requirements",
-                  "Coordinate with suppliers"
-                ],
-                urgency: "High",
-                amendments: [detailedAmendments[1].title],
-                deadline: "2025-09-15"
-              }
-            ]
-          },
-          {
-            timeframe: "Short-term (3-4 weeks)",
-            actions: [
-              {
-                department: "Production",
-                task: "Phase out non-compliant packaging",
-                steps: [
-                  "Schedule production changes",
-                  "Manage inventory transition",
-                  "Update batch records"
-                ],
-                urgency: "High",
-                amendments: [detailedAmendments[1].title],
-                deadline: "2025-09-30"
-              }
-            ]
-          },
-          {
-            timeframe: "Ongoing",
-            actions: [
-              {
-                department: "Regulatory Affairs",
-                task: "Monitor for additional guidance",
-                steps: [
-                  "Subscribe to FSSAI updates",
-                  "Attend industry briefings",
-                  "Review monthly"
-                ],
-                urgency: "Medium",
-                amendments: ["All"],
-                deadline: "Ongoing"
-              }
-            ]
-          }
-        ],
+        timeline: timelineSections,
         summary: {
-          critical_items: 1,
-          high_priority: 2,
-          total_actions: 4,
-          compliance_score: 72
+          critical_items: (timelineSections.flatMap(s => s.actions).filter(a => a.urgency === 'Critical')).length,
+          high_priority: (timelineSections.flatMap(s => s.actions).filter(a => a.urgency === 'High')).length,
+          total_actions: timelineSections.flatMap(s => s.actions).length,
+          compliance_score: report.overall_status === 'compliant' ? 95 : report.overall_status === 'partially_compliant' ? 75 : report.overall_status === 'unclear' ? 60 : 50
         },
-        status: "requires_action",
-        notes: "Generated by Vigilo Compliance AI based on latest regulations",
-        next_steps: [
-          "Review detailed action items with department heads",
-          "Schedule compliance checkpoint in 2 weeks"
-        ]
+        status: report.overall_status === 'compliant' ? 'compliant' : 'requires_action',
+        notes: 'Generated from Stage 5 compliance report',
+        next_steps: (report.summary ? [report.summary] : [])
       };
 
-      setAnalysis({
-        analysis_steps: logs,
-        initial_amendments: amendments.length,
-        relevant_amendments: detailedAmendments.length,
-        compliance_plan: compliancePlan,
-        detailed_amendments: detailedAmendments
-      });
-      setProgress("Analysis complete");
+      // Prepare findings (keep full details to render evidence-rich cards)
+      const findings = byAmendment.map((a: any) => ({
+        amendment_title: a.amendment_title,
+        status: a.status,
+        current_state: a.current_state,
+        to_be_done: a.to_be_done,
+        evidence: Array.isArray(a.evidence) ? a.evidence : [],
+        gaps: Array.isArray(a.gaps) ? a.gaps : [],
+        actions: Array.isArray(a.actions) ? a.actions : [],
+        last_date: a.last_date || a.normalized_last_date || a.deadline || a.due || 'Unknown',
+        deadline_text: a.deadline_text,
+        urgency: a.urgency || 'Medium',
+        document_id: a.document_id || a?.meta?.document_id,
+        pdf_url: a.pdf_url,
+      }));
 
-      // Add completion notification
-      setNotifications(prev => [
+      // Also keep a lighter list for the Amendments section (optional)
+      const detailedAmendments = byAmendment.map((a: any) => ({
+        title: a.amendment_title,
+        date: a.last_date || a.normalized_last_date || a.deadline || a.due || 'Unknown',
+        summary: a.current_state,
+        requirements: Array.isArray(a.actions) ? a.actions : [],
+        relevance_reason: a.to_be_done,
+        product_impacts: [],
+        document_id: a.document_id || a?.meta?.document_id,
+        pdf_url: a.pdf_url,
+      }));
+
+      const nextAnalysis = {
+        analysis_steps: result?.analysis_steps || {},
+        initial_amendments: result?.amendments_count || amendments.length,
+        relevant_amendments: byAmendment.length,
+        compliance_plan: compliancePlan,
+        detailed_amendments: detailedAmendments,
+        findings
+      } as Analysis;
+      setAnalysis(nextAnalysis);
+      // Auto-select first available timeline slot so sidebar renders immediately
+      if (!selectedTimeline && compliancePlan.timeline && compliancePlan.timeline.length > 0) {
+        setSelectedTimeline(compliancePlan.timeline[0]);
+      }
+      setProgress('Analysis complete');
+      const actionCount = timelineSections.flatMap(s => s.actions).length;
+      setNotifications(prev => ([
         ...prev,
-        {
-          id: 'analysis-complete',
-          message: 'Compliance analysis completed! 4 actions required',
-          type: 'update'
-        }
-      ]);
+        { id: 'analysis-complete', message: `Compliance analysis completed! ${actionCount} actions generated`, type: 'update' }
+      ]));
 
     } catch (e: any) {
       setError(e?.message || 'Analysis failed. Please try again.');
-      setNotifications(prev => [
-        ...prev,
-        {
-          id: 'error',
-          message: 'Compliance analysis failed',
-          type: 'alert'
-        }
-      ]);
+      setNotifications(prev => ([...prev, { id: 'error', message: 'Compliance analysis failed', type: 'alert' }]));
     } finally {
+      clearInterval(stepTimer);
       setLoading(false);
     }
   }, [API_BASE, companyId, amendments]);
@@ -409,13 +483,11 @@ export default function DashboardPage() {
       <div className="flex items-center gap-3">
         <button 
           onClick={runCompliance} 
-          disabled={loading || !companyId} 
+          disabled={loading} 
           className={`px-5 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 
             ${loading 
               ? 'bg-gray-700 text-gray-400' 
-              : companyId 
-                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/20' 
-                : 'bg-gray-800 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/20' 
             }`}
         >
           <TestTube className="h-4 w-4" /> 
@@ -426,7 +498,7 @@ export default function DashboardPage() {
               <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse delay-200"></span>
             </span>
           ) : (
-            "Run Compliance Check"
+            "Test Compliance"
           )}
         </button>
         <button className="p-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors relative">
@@ -465,7 +537,13 @@ export default function DashboardPage() {
 
         <div className="space-y-6">
           {plan.timeline?.map((slot, idx) => (
-            <div key={idx} className="border border-gray-800 rounded-lg p-5 bg-gray-900/50">
+            <div 
+              key={idx} 
+              className={`border rounded-lg p-5 cursor-pointer transition-colors ${
+                selectedTimeline?.timeframe === slot.timeframe ? 'border-emerald-500/40 bg-gray-900' : 'border-gray-800 bg-gray-900/50'
+              }`}
+              onClick={() => setSelectedTimeline(slot)}
+            >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-white">{slot.timeframe}</h3>
                 <span className="text-sm text-gray-400">
@@ -628,7 +706,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between mb-3">
         <h3 className="text-lg font-medium text-white">{amendment.title}</h3>
         <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
-          {new Date(amendment.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+          {safeFormatDate(amendment.date)}
         </span>
       </div>
 
@@ -681,9 +759,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {amendment.document_id && (
+      {(amendment.document_id || amendment.pdf_url) && (
         <a
-          href={`${API_BASE}/pdf?document_id=${encodeURIComponent(amendment.document_id)}`}
+          href={amendment.pdf_url || `${FRONT_API_BASE}/pdf?document_id=${encodeURIComponent(amendment.document_id)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -793,6 +871,30 @@ export default function DashboardPage() {
           </ul>
         </nav>
 
+        {selectedTimeline && (
+          <div className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div className="text-xs text-gray-400 mb-2">TIMELINE DETAILS</div>
+            <div className="text-sm text-white font-medium mb-2">{selectedTimeline.timeframe}</div>
+            <ul className="space-y-3">
+              {selectedTimeline.actions.map((a, i) => (
+                <li key={i} className="text-xs text-gray-300">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-200">{a.task}</span>
+                    {a.deadline && (
+                      <span className="flex items-center gap-1 text-gray-400">
+                        <Calendar className="h-3 w-3" /> {a.deadline === 'Unknown' ? 'Unknown' : safeFormatDate(a.deadline)}
+                      </span>
+                    )}
+                  </div>
+                  {a.department && (
+                    <div className="mt-1 text-[10px] text-gray-500">{a.department}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="mt-auto pt-6 border-t border-gray-800">
           <div className="text-xs text-gray-400 mb-2">Compliance Status</div>
           <div className="flex items-center justify-between">
@@ -813,6 +915,7 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="flex-1 p-8">
         <Header />
+
 
         {/* Status Messages */}
         {!companyId && (
@@ -855,6 +958,24 @@ export default function DashboardPage() {
 
         {analysis ? (
           <div className="space-y-8">
+            {/* Chicory Labels compliance spotlight (only after analysis) */}
+            <ChicoryLabelsCard />
+
+            {/* Evidence-rich compliance findings */}
+            {analysis.findings?.length ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-white">Compliance Findings</h2>
+                  <div className="text-sm text-gray-400">{analysis.findings.length} findings</div>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  {analysis.findings.map((f: any, i: number) => (
+                    <FindingCard key={i} finding={f} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <CompliancePlanCard plan={analysis.compliance_plan} />
 
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">

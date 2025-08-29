@@ -238,5 +238,29 @@
     "pdf_url": "file:///Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Product_Label.pdf",
     "pdf_path": "/Users/suhaaniagarwal/vigilo/synthetic_pdfs_detailed/Product_Label.pdf",
     "document_id": "8182988956f8909bcb16471529d06f7d"
+  },
+  {
+    "title": "Gazette Notification of Referral Food Laboratory under section 43(2) of FSS Act \u00a0[Uploaded on : 29-08-2025]",
+    "date": "29-08-2025",
+    "source": "FSSAI",
+    "pdf_url": "https://www.fssai.gov.in/upload/notifications/2025/08/68b18c0fca5c5265787 Lab Notification.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/backend/data/pdfs/Gazette Notification of Referral Food Laboratory u_e4add014.pdf",
+    "document_id": "e4add0144a6c751f4b4ec84c33090bd6"
+  },
+  {
+    "title": "Gazette Notification of Food Safety Officer for the Fortified Rice Kernel under Sub-Section 5 of Section 10 read with Section 37 of FSS Act \u00a0[Uploaded on : 29-08-2025]",
+    "date": "29-08-2025",
+    "source": "FSSAI",
+    "pdf_url": "https://www.fssai.gov.in/upload/notifications/2025/08/68b18fbb96228265786 food safety officer Notification.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/backend/data/pdfs/Gazette Notification of Food Safety Officer for th_5c288cba.pdf",
+    "document_id": "5c288cbac208f241ad23bb6d342cf241"
+  },
+  {
+    "title": "Gazette Notification of Food Safety Officer Railways under Sub-Section 5 of Section 10 read with Section 37 of FSS Act \u00a0[Uploaded on : 26-08-2025]",
+    "date": "26-08-2025",
+    "source": "FSSAI",
+    "pdf_url": "https://www.fssai.gov.in/upload/notifications/2025/08/68ad61233bd8bRailway FSO.pdf",
+    "pdf_path": "/Users/suhaaniagarwal/vigilo/backend/data/pdfs/Gazette Notification of Food Safety Officer Railwa_d31f9c38.pdf",
+    "document_id": "d31f9c382ac9557434b5c095bcf51cf0"
   }
 ]
