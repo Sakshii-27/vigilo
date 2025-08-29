@@ -1,7 +1,18 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Bell, User, Upload, FileText, Shield, Zap, TrendingUp, Eye, BarChart3, CheckCircle, AlertTriangle, Clock, Building, MapPin, Phone, Mail, Calendar, Tag, ChevronDown, ChevronRight, X, Plus } from 'lucide-react';
+import React, { useState } from "react";
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  Clock,
+  Building,
+  MapPin,
+  Phone,
+  Mail,
+  ChevronRight,
+  X,
+} from "lucide-react";
 
 // Types
 interface CompanyInfo {
@@ -13,17 +24,20 @@ interface CompanyInfo {
   businessDescription: string;
   fssaiNumber?: string;
   gstNumber?: string;
+  rbiNumber?: string;
+  sebiNumber?: string;
+  cin?: string;
 }
 
 interface RegulationCard {
   id: string;
   title: string;
   summary: string;
-  impact: 'High' | 'Medium' | 'Low';
+  impact: "High" | "Medium" | "Low";
   sector: string[];
   date: string;
   views: number;
-  status: 'New' | 'Updated' | 'Compliance Required';
+  status: "New" | "Updated" | "Compliance Required";
   tags: string[];
 }
 
@@ -35,33 +49,46 @@ interface CategorySelectionProps {
   setCurrentStep: (s: string) => void;
 }
 
-const CategorySelection = ({ categories, selectedCategory, setSelectedCategory, setCurrentStep }: CategorySelectionProps) => (
+const CategorySelection = ({
+  categories,
+  selectedCategory,
+  setSelectedCategory,
+  setCurrentStep,
+}: CategorySelectionProps) => (
   <div className="min-h-screen bg-gray-900 py-12">
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-4">
           Select Your Industry Category
         </h1>
-        <p className="text-gray-400 text-lg">Choose the category that best describes your business to get started with compliance</p>
+        <p className="text-gray-400 text-lg">
+          Choose the category that best describes your business to get started
+          with compliance
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {categories.map(category => (
+        {categories.map((category) => (
           <div
             key={category.id}
             onClick={() => {
               setSelectedCategory(category.id);
-              setCurrentStep('company');
+              setCurrentStep("company");
             }}
-            className={`bg-gray-800/30 border-2 rounded-lg p-6 cursor-pointer transition-all duration-300 transform hover:scale-105 backdrop-blur-sm ${selectedCategory === category.id
-                ? 'border-emerald-500 bg-emerald-500/10'
-                : 'border-gray-700/50 hover:border-emerald-500/50'
-              }`}
+            className={`bg-gray-800/30 border-2 rounded-lg p-6 cursor-pointer transition-all duration-300 transform hover:scale-105 backdrop-blur-sm ${
+              selectedCategory === category.id
+                ? "border-emerald-500 bg-emerald-500/10"
+                : "border-gray-700/50 hover:border-emerald-500/50"
+            }`}
           >
-            <div className={`w-16 h-16 bg-gradient-to-br ${category.color} rounded-lg flex items-center justify-center text-2xl mb-4 mx-auto`}>
+            <div
+              className={`w-16 h-16 bg-gradient-to-br ${category.color} rounded-lg flex items-center justify-center text-2xl mb-4 mx-auto`}
+            >
               {category.icon}
             </div>
-            <h3 className="text-xl font-semibold text-white text-center mb-2">{category.name}</h3>
+            <h3 className="text-xl font-semibold text-white text-center mb-2">
+              {category.name}
+            </h3>
             <div className="flex justify-center">
               <ChevronRight className="w-5 h-5 text-emerald-400" />
             </div>
@@ -71,7 +98,7 @@ const CategorySelection = ({ categories, selectedCategory, setSelectedCategory, 
 
       <div className="flex justify-center mt-8">
         <button
-          onClick={() => window.location.href = '/'}
+          onClick={() => (window.location.href = "/")}
           className="text-gray-400 hover:text-white px-6 py-3 rounded-lg font-medium transition-colors"
         >
           ← Back to Home
@@ -79,7 +106,7 @@ const CategorySelection = ({ categories, selectedCategory, setSelectedCategory, 
       </div>
     </div>
   </div>
-)
+);
 
 interface CompanyDetailsProps {
   companyInfo: CompanyInfo;
@@ -88,14 +115,261 @@ interface CompanyDetailsProps {
   setCurrentStep: (s: string) => void;
 }
 
-const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurrentStep }: CompanyDetailsProps) => (
+const documentsByCategory: Record<
+  string,
+  { id: string; label?: string; required: boolean; description?: string }[]
+> = {
+  food: [
+    {
+      id: "fssai",
+      label: "FSSAI License Copy",
+      required: true,
+      description: "Valid FSSAI license with current validity",
+    },
+    {
+      id: "gst",
+      label: "GST Certificate",
+      required: true,
+      description: "GST registration certificate or incorporation certificate",
+    },
+    {
+      id: "audit",
+      label: "Food Safety Audit Report",
+      required: false,
+      description: "Latest food safety audit report (if available)",
+    },
+    {
+      id: "lab",
+      label: "Lab Test Report",
+      required: true,
+      description: "Latest product batch test report",
+    },
+    {
+      id: "label",
+      label: "Product Label Design",
+      required: true,
+      description: "Front and back label design (PDF/PNG)",
+    },
+    {
+      id: "ingredients",
+      label: "Ingredient List",
+      required: true,
+      description: "Complete ingredient list with percentages",
+    },
+    {
+      id: "nutrition",
+      label: "Nutritional Information",
+      required: true,
+      description: "Nutritional facts table",
+    },
+  ],
+  finance: [
+    {
+      id: "rbiCertificate",
+      label: "RBI Approval Certificate",
+      required: true,
+      description: "Approval certificate issued by RBI for financial services",
+    },
+    {
+      id: "cinCertificate",
+      label: "CIN Certificate",
+      required: true,
+      description: "Corporate Identification Number certificate",
+    },
+    {
+      id: "auditReport",
+      label: "Latest Audit Report",
+      required: true,
+      description: "Most recent audited financial statement",
+    },
+    {
+      id: "panCard",
+      label: "Company PAN Card",
+      required: true,
+      description: "Permanent Account Number of the company",
+    },
+    {
+      id: "taxReturns",
+      label: "Income Tax Returns",
+      required: true,
+      description: "Last 2 years of income tax returns",
+    },
+    {
+      id: "boardResolution",
+      label: "Board Resolution",
+      required: false,
+      description: "Board resolution approving financial operations",
+    },
+    {
+      id: "shareholdingPattern",
+      label: "Shareholding Pattern",
+      required: false,
+      description: "Current shareholding structure of the company",
+    },
+  ],
+
+  technology: [
+    {
+      id: "startupIndia",
+      label: "Startup India Certificate",
+      required: true,
+      description: "Recognition under Startup India initiative",
+    },
+    {
+      id: "msme",
+      label: "MSME Registration Certificate",
+      required: true,
+      description: "Udyam/MSME registration certificate",
+    },
+    {
+      id: "ipCertificate",
+      label: "IP/Patent Certificates",
+      required: false,
+      description: "Patent or intellectual property documents",
+    },
+    {
+      id: "softwareCompliance",
+      label: "Software Compliance Certificate",
+      required: true,
+      description: "Compliance certificate for software/product",
+    },
+    {
+      id: "dataPolicy",
+      label: "Data Security Policy",
+      required: true,
+      description: "Company’s data protection and security policy",
+    },
+  ],
+
+  healthcare: [
+    {
+      id: "drugLicense",
+      label: "Drug License",
+      required: true,
+      description: "Drug license issued by respective authority",
+    },
+    {
+      id: "isoCertificate",
+      label: "ISO 13485 Certification",
+      required: true,
+      description:
+        "ISO certification for medical devices and healthcare quality",
+    },
+    {
+      id: "clinicalTrial",
+      label: "Clinical Trial Reports",
+      required: false,
+      description: "Clinical trials and safety reports for healthcare products",
+    },
+    {
+      id: "doctorRegistration",
+      label: "Doctor/Practitioner Registration",
+      required: true,
+      description: "Registration certificate for medical practitioners",
+    },
+    {
+      id: "hospitalNOC",
+      label: "Hospital NOC",
+      required: false,
+      description:
+        "No Objection Certificate from healthcare facility (if applicable)",
+    },
+  ],
+
+  export: [
+    {
+      id: "iecCertificate",
+      label: "Import Export Code (IEC)",
+      required: true,
+      description: "Mandatory import-export code issued by DGFT",
+    },
+    {
+      id: "exportLicense",
+      label: "Export License",
+      required: true,
+      description: "Export license for restricted goods",
+    },
+    {
+      id: "shippingBill",
+      label: "Shipping Bill",
+      required: true,
+      description: "Latest shipping bill for export consignments",
+    },
+    {
+      id: "coo",
+      label: "Certificate of Origin",
+      required: true,
+      description: "Certificate verifying product origin",
+    },
+    {
+      id: "billOfLading",
+      label: "Bill of Lading",
+      required: true,
+      description: "Mandatory document for sea/air shipments",
+    },
+    {
+      id: "exportInsurance",
+      label: "Export Insurance Policy",
+      required: false,
+      description: "Insurance policy covering international trade",
+    },
+  ],
+
+  manufacturing: [
+    {
+      id: "factoryLicense",
+      label: "Factory License",
+      required: true,
+      description: "License under Factories Act",
+    },
+    {
+      id: "gstManufacturing",
+      label: "GST Certificate",
+      required: true,
+      description: "GST registration for manufacturing operations",
+    },
+    {
+      id: "pollutionCertificate",
+      label: "Pollution Control Certificate",
+      required: true,
+      description: "NOC/clearance from Pollution Control Board",
+    },
+    {
+      id: "fireSafety",
+      label: "Fire Safety Certificate",
+      required: true,
+      description: "Fire safety NOC for manufacturing facility",
+    },
+    {
+      id: "iso9001",
+      label: "ISO 9001 Certification",
+      required: true,
+      description: "Quality management certification for manufacturing",
+    },
+    {
+      id: "machineryInvoice",
+      label: "Machinery Purchase Invoices",
+      required: false,
+      description: "Invoices of manufacturing equipment",
+    },
+  ],
+};
+
+const CompanyDetails = ({
+  companyInfo,
+  setCompanyInfo,
+  selectedCategory,
+  setCurrentStep,
+}: CompanyDetailsProps) => (
   <div className="min-h-screen bg-gray-900 py-12">
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-8 backdrop-blur-sm">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-2">
           Company Information
         </h1>
-        <p className="text-gray-400 mb-8">Please provide your company details for compliance verification</p>
+        <p className="text-gray-400 mb-8">
+          Please provide your company details for compliance verification
+        </p>
 
         <div className="space-y-6">
           <div>
@@ -106,7 +380,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
             <input
               type="text"
               value={companyInfo.name}
-              onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setCompanyInfo((prev: CompanyInfo) => ({
+                  ...prev,
+                  name: e.target.value,
+                }))
+              }
               className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               placeholder="Enter your company name"
             />
@@ -119,7 +398,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
             </label>
             <textarea
               value={companyInfo.address}
-              onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, address: e.target.value }))}
+              onChange={(e) =>
+                setCompanyInfo((prev: CompanyInfo) => ({
+                  ...prev,
+                  address: e.target.value,
+                }))
+              }
               className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               rows={3}
               placeholder="Enter your complete address"
@@ -135,7 +419,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
               <input
                 type="tel"
                 value={companyInfo.phone}
-                onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, phone: e.target.value }))}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    phone: e.target.value,
+                  }))
+                }
                 className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 placeholder="+91 XXXXX XXXXX"
               />
@@ -149,7 +438,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
               <input
                 type="email"
                 value={companyInfo.email}
-                onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, email: e.target.value }))}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    email: e.target.value,
+                  }))
+                }
                 className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 placeholder="company@example.com"
               />
@@ -162,7 +456,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
             </label>
             <select
               value={companyInfo.businessType}
-              onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, businessType: e.target.value }))}
+              onChange={(e) =>
+                setCompanyInfo((prev: CompanyInfo) => ({
+                  ...prev,
+                  businessType: e.target.value,
+                }))
+              }
               className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
             >
               <option value="">Select business type</option>
@@ -180,11 +479,18 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
               </label>
               <textarea
                 value={companyInfo.businessDescription}
-                onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, businessDescription: e.target.value }))}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    businessDescription: e.target.value,
+                  }))
+                }
                 className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 rows={6}
                 maxLength={200}
-                placeholder={getBusinessDescriptionPlaceholder(companyInfo.businessType)}
+                placeholder={getBusinessDescriptionPlaceholder(
+                  companyInfo.businessType
+                )}
               />
               <div className="flex justify-between mt-2">
                 <p className="text-xs text-gray-500">
@@ -197,7 +503,7 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
             </div>
           )}
 
-          {selectedCategory === 'food' && (
+          {selectedCategory === "food" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -206,7 +512,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
                 <input
                   type="text"
                   value={companyInfo.fssaiNumber}
-                  onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, fssaiNumber: e.target.value }))}
+                  onChange={(e) =>
+                    setCompanyInfo((prev: CompanyInfo) => ({
+                      ...prev,
+                      fssaiNumber: e.target.value,
+                    }))
+                  }
                   className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   placeholder="FSSAI License Number"
                 />
@@ -219,7 +530,12 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
                 <input
                   type="text"
                   value={companyInfo.gstNumber}
-                  onChange={(e) => setCompanyInfo((prev: CompanyInfo) => ({ ...prev, gstNumber: e.target.value }))}
+                  onChange={(e) =>
+                    setCompanyInfo((prev: CompanyInfo) => ({
+                      ...prev,
+                      gstNumber: e.target.value,
+                    }))
+                  }
                   className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   placeholder="GST Number"
                 />
@@ -228,15 +544,91 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
           )}
         </div>
 
+        {selectedCategory === "finance" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                RBI License / Registration Number *
+              </label>
+              <input
+                type="text"
+                value={companyInfo.rbiNumber}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    rbiNumber: e.target.value,
+                  }))
+                }
+                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="Enter RBI License / Registration Number"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                SEBI Registration Number (if applicable)
+              </label>
+              <input
+                type="text"
+                value={companyInfo.sebiNumber}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    sebiNumber: e.target.value,
+                  }))
+                }
+                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="Enter SEBI Registration Number"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Corporate Identification Number (CIN) *
+              </label>
+              <input
+                type="text"
+                value={companyInfo.cin}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    cin: e.target.value,
+                  }))
+                }
+                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="Enter CIN"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                GST Number *
+              </label>
+              <input
+                type="text"
+                value={companyInfo.gstNumber}
+                onChange={(e) =>
+                  setCompanyInfo((prev: CompanyInfo) => ({
+                    ...prev,
+                    gstNumber: e.target.value,
+                  }))
+                }
+                className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="GST Number"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between mt-8">
           <button
-            onClick={() => setCurrentStep('category')}
+            onClick={() => setCurrentStep("category")}
             className="text-gray-400 hover:text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
             ← Back
           </button>
           <button
-            onClick={() => setCurrentStep('documents')}
+            onClick={() => setCurrentStep("documents")}
             className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
           >
             Next: Upload Documents →
@@ -245,39 +637,62 @@ const CompanyDetails = ({ companyInfo, setCompanyInfo, selectedCategory, setCurr
       </div>
     </div>
   </div>
-)
+);
 
 interface DocumentsUploadProps {
-  foodDocuments: { id: string; name: string; required: boolean; description: string }[];
   uploadedFiles: { [k: string]: File[] };
   handleFileUpload: (id: string, files: FileList) => void;
   removeFile: (id: string, idx: number) => void;
   setCurrentStep: (s: string) => void;
+  selectedCategory: string;
+  documents: {
+    id: string;
+    label?: string;
+    name?: string;
+    required?: boolean;
+    description?: string;
+  }[];
 }
 
-const DocumentsUpload = ({ foodDocuments, uploadedFiles, handleFileUpload, removeFile, setCurrentStep }: DocumentsUploadProps) => (
+const DocumentsUpload = ({
+  uploadedFiles,
+  handleFileUpload,
+  removeFile,
+  setCurrentStep,
+  selectedCategory,
+}: DocumentsUploadProps) => (
   <div className="min-h-screen bg-gray-900 py-12">
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-8 backdrop-blur-sm">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-2">
           Upload Required Documents
         </h1>
-        <p className="text-gray-400 mb-8">Please upload all required documents for compliance verification</p>
+        <p className="text-gray-400 mb-8">
+          Please upload all required documents for compliance verification
+        </p>
 
         <div className="space-y-6">
-          {foodDocuments.map(doc => (
-            <div key={doc.id} className="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
+          {(documentsByCategory[selectedCategory] || []).map((doc) => (
+            <div
+              key={doc.id}
+              className="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6"
+            >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center mb-2">
-                    <h3 className="text-lg font-semibold text-white">{doc.name}</h3>
+                    <h3 className="text-lg font-semibold text-white">
+                      {doc.label}
+                    </h3>
                     {doc.required && (
-                      <span className="ml-2 bg-red-500/20 text-red-400 px-2 py-1 rounded-full text-xs border border-red-500/30">
-                        Required
+                      <span className="ml-2 text-red-400 text-sm">
+                        *Required
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-400 text-sm">{doc.description}</p>
+
+                  {doc.description && (
+                    <p className="text-gray-400 text-sm">{doc.description}</p>
+                  )}
                 </div>
                 <FileText className="w-6 h-6 text-emerald-400 ml-4" />
               </div>
@@ -287,7 +702,9 @@ const DocumentsUpload = ({ foodDocuments, uploadedFiles, handleFileUpload, remov
                   type="file"
                   id={`file-${doc.id}`}
                   multiple
-                  onChange={(e) => e.target.files && handleFileUpload(doc.id, e.target.files)}
+                  onChange={(e) =>
+                    e.target.files && handleFileUpload(doc.id, e.target.files)
+                  }
                   className="hidden"
                   accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
                 />
@@ -296,15 +713,22 @@ const DocumentsUpload = ({ foodDocuments, uploadedFiles, handleFileUpload, remov
                   <p className="text-gray-400">
                     Click to upload or drag and drop
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">PDF, PNG, JPG, DOC, DOCX (Max 10MB each)</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    PDF, PNG, JPG, DOC, DOCX (Max 10MB each)
+                  </p>
                 </label>
               </div>
 
               {uploadedFiles[doc.id] && uploadedFiles[doc.id].length > 0 && (
                 <div className="mt-4 space-y-2">
-                  <h4 className="text-sm font-medium text-gray-300">Uploaded Files:</h4>
+                  <h4 className="text-sm font-medium text-gray-300">
+                    Uploaded Files:
+                  </h4>
                   {uploadedFiles[doc.id].map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-600/30 rounded-lg p-3">
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-gray-600/30 rounded-lg p-3"
+                    >
                       <div className="flex items-center">
                         <FileText className="w-4 h-4 text-emerald-400 mr-2" />
                         <span className="text-sm text-white">{file.name}</span>
@@ -328,13 +752,13 @@ const DocumentsUpload = ({ foodDocuments, uploadedFiles, handleFileUpload, remov
 
         <div className="flex justify-between mt-8">
           <button
-            onClick={() => setCurrentStep('company')}
+            onClick={() => setCurrentStep("company")}
             className="text-gray-400 hover:text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
             ← Back
           </button>
           <button
-            onClick={() => setCurrentStep('submit')}
+            onClick={() => setCurrentStep("submit")}
             className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
           >
             Review & Submit →
@@ -343,7 +767,7 @@ const DocumentsUpload = ({ foodDocuments, uploadedFiles, handleFileUpload, remov
       </div>
     </div>
   </div>
-)
+);
 
 interface SubmitComponentProps {
   companyInfo: CompanyInfo;
@@ -354,15 +778,31 @@ interface SubmitComponentProps {
   setCompanyInfo: (c: CompanyInfo) => void;
   setUploadedFiles: (u: { [k: string]: File[] }) => void;
   setSelectedCategory: (s: string) => void;
-  foodDocuments: { id: string; name: string; required: boolean; description: string }[];
+  // foodDocuments: { id: string; name: string; required: boolean; description: string }[];
+  documents: {
+    id: string;
+    label?: string;
+    name?: string;
+    required?: boolean;
+    description?: string;
+  }[];
 }
 
-const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategory, setCurrentStep, setCompanyInfo, setUploadedFiles, setSelectedCategory, foodDocuments }: SubmitComponentProps) => {
+const SubmitComponent = ({
+  companyInfo,
+  uploadedFiles,
+  API_BASE,
+  selectedCategory,
+  setCurrentStep,
+  setCompanyInfo,
+  setUploadedFiles,
+  setSelectedCategory,
+}: // foodDocuments,
+SubmitComponentProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
 
   const fileOrNull = (arr?: File[]) => (arr && arr.length > 0 ? arr[0] : null);
 
@@ -371,52 +811,53 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
     setError(null);
     try {
       const fd = new FormData();
-      fd.append('company_name', companyInfo.name);
-      fd.append('address', companyInfo.address || '');
-      fd.append('fssai_license', companyInfo.fssaiNumber || '');
-      fd.append('business_type', companyInfo.businessType || '');
-      fd.append('gst_number', companyInfo.gstNumber || '');
-      fd.append('product_name', 'Default Product');
-      fd.append('product_category', selectedCategory || 'general');
-      fd.append('ingredients', JSON.stringify({}));
-      fd.append('nutrition', JSON.stringify({}));
-      fd.append('allergens', '');
-      const labelFiles = uploadedFiles['label'] || [];
+      fd.append("company_name", companyInfo.name);
+      fd.append("address", companyInfo.address || "");
+      fd.append("fssai_license", companyInfo.fssaiNumber || "");
+      fd.append("business_type", companyInfo.businessType || "");
+      fd.append("gst_number", companyInfo.gstNumber || "");
+      fd.append("product_name", "Default Product");
+      fd.append("product_category", selectedCategory || "general");
+      fd.append("ingredients", JSON.stringify({}));
+      fd.append("nutrition", JSON.stringify({}));
+      fd.append("allergens", "");
+      const labelFiles = uploadedFiles["label"] || [];
       const labelFront = labelFiles[0];
       const labelBack = labelFiles[1];
-      if (labelFront) fd.append('label_front', labelFront);
-      if (labelBack) fd.append('label_back', labelBack);
-      fd.append('expiry_format', 'DD/MM/YYYY');
-      fd.append('claims', '');
-      const fssai = fileOrNull(uploadedFiles['fssai']);
-      const gst = fileOrNull(uploadedFiles['gst']);
-      const audit = fileOrNull(uploadedFiles['audit']);
-      const lab = fileOrNull(uploadedFiles['lab']);
-      if (fssai) fd.append('fssai_file', fssai);
-      if (gst) fd.append('gst_file', gst);
-      if (audit) fd.append('audit_file', audit);
-      if (lab) fd.append('lab_report_file', lab);
+      if (labelFront) fd.append("label_front", labelFront);
+      if (labelBack) fd.append("label_back", labelBack);
+      fd.append("expiry_format", "DD/MM/YYYY");
+      fd.append("claims", "");
+      const fssai = fileOrNull(uploadedFiles["fssai"]);
+      const gst = fileOrNull(uploadedFiles["gst"]);
+      const audit = fileOrNull(uploadedFiles["audit"]);
+      const lab = fileOrNull(uploadedFiles["lab"]);
+      if (fssai) fd.append("fssai_file", fssai);
+      if (gst) fd.append("gst_file", gst);
+      if (audit) fd.append("audit_file", audit);
+      if (lab) fd.append("lab_report_file", lab);
 
       const submitRes = await fetch(`${API_BASE}/company/submit`, {
-        method: 'POST',
+        method: "POST",
         body: fd,
       });
       if (!submitRes.ok) throw new Error(`Submit failed: ${submitRes.status}`);
       const submitJson = await submitRes.json();
       const cid = submitJson.company_id as string;
       setCompanyId(cid);
-      try { localStorage.setItem('company_id', cid); } catch {}
+      try {
+        localStorage.setItem("company_id", cid);
+      } catch {}
 
-      try { await fetch(`${API_BASE}/update`); } catch (e) { /* noop */ }
-
-      const compRes = await fetch(`${API_BASE}/compliance/check?company_id=${encodeURIComponent(cid)}`);
-      if (!compRes.ok) throw new Error(`Compliance check failed: ${compRes.status}`);
-      const compJson = await compRes.json();
-      setAnalysis(compJson.analysis);
+      try {
+        await fetch(`${API_BASE}/update`);
+      } catch (e) {
+        /* noop */
+      }
 
       setSubmitted(true);
     } catch (e: any) {
-      setError(e?.message || 'Submission failed');
+      setError(e?.message || "Submission failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -430,12 +871,17 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
             <div className="w-16 h-16 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-4">Submission Successful!</h1>
+            <h1 className="text-3xl font-bold text-white mb-4">
+              Submission Successful!
+            </h1>
             <p className="text-gray-400 mb-8">
-              Your data has been submitted and the compliance analysis has been generated below.
+              Your data has been submitted and the compliance analysis has been
+              generated below.
             </p>
             <div className="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6 mb-8">
-              <h3 className="text-lg font-semibold text-white mb-4">Submission Summary</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Submission Summary
+              </h3>
               <div className="text-left space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Company ID:</span>
@@ -443,7 +889,9 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Category:</span>
-                  <span className="text-white capitalize">{selectedCategory}</span>
+                  <span className="text-white capitalize">
+                    {selectedCategory}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Company:</span>
@@ -451,7 +899,9 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Documents:</span>
-                  <span className="text-white">{Object.values(uploadedFiles).flat().length} files</span>
+                  <span className="text-white">
+                    {Object.values(uploadedFiles).flat().length} files
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status:</span>
@@ -463,38 +913,32 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => {
-                  setCurrentStep('category');
+                  setCurrentStep("category");
                   setSubmitted(false);
                   setCompanyInfo({
-                    name: '',
-                    address: '',
-                    phone: '',
-                    email: '',
-                    businessType: '',
-                    businessDescription: '',
-                    fssaiNumber: '',
-                    gstNumber: ''
+                    name: "",
+                    address: "",
+                    phone: "",
+                    email: "",
+                    businessType: "",
+                    businessDescription: "",
+                    fssaiNumber: "",
+                    gstNumber: "",
                   });
                   setUploadedFiles({});
-                  setSelectedCategory('');
+                  setSelectedCategory("");
                 }}
                 className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
               >
                 Start New Application
               </button>
               <button
-                onClick={() => window.location.href = "/trashboard"}
-                 className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors">
+                onClick={() => (window.location.href = "/dashboard")}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors"
+              >
                 Go to Dashboard
               </button>
             </div>
-
-            {analysis && (
-              <div className="mt-6 text-left">
-                <h3 className="text-white font-semibold">Compliance Analysis (summary)</h3>
-                <pre className="text-xs text-gray-300 overflow-auto max-h-64 mt-2 whitespace-pre-wrap">{JSON.stringify(analysis, null, 2)}</pre>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -508,7 +952,10 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-2">
             Review & Submit
           </h1>
-          <p className="text-gray-400 mb-8">Please review all information before submitting your compliance application</p>
+          <p className="text-gray-400 mb-8">
+            Please review all information before submitting your compliance
+            application
+          </p>
 
           {/* Company Information Review */}
           <div className="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6 mb-6">
@@ -523,11 +970,15 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
               </div>
               <div>
                 <span className="text-gray-400">Business Type:</span>
-                <p className="text-white capitalize">{companyInfo.businessType}</p>
+                <p className="text-white capitalize">
+                  {companyInfo.businessType}
+                </p>
               </div>
               <div className="md:col-span-2">
                 <span className="text-gray-400">Business Description:</span>
-                <p className="text-white text-sm">{companyInfo.businessDescription}</p>
+                <p className="text-white text-sm">
+                  {companyInfo.businessDescription}
+                </p>
               </div>
               <div>
                 <span className="text-gray-400">Phone:</span>
@@ -541,7 +992,7 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
                 <span className="text-gray-400">Address:</span>
                 <p className="text-white">{companyInfo.address}</p>
               </div>
-              {selectedCategory === 'food' && (
+              {selectedCategory === "food" && (
                 <>
                   <div>
                     <span className="text-gray-400">FSSAI License:</span>
@@ -563,19 +1014,27 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
               Documents Uploaded
             </h3>
             <div className="space-y-3">
-              {foodDocuments.map(doc => (
-                <div key={doc.id} className="flex items-center justify-between py-2">
+              {documentsByCategory[selectedCategory].map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between py-2"
+                >
                   <div className="flex items-center">
-                    <span className="text-gray-300">{doc.name}</span>
+                    <span className="text-gray-300">{doc.label}</span>
                     {doc.required && (
-                      <span className="ml-2 text-red-400 text-xs">*Required</span>
+                      <span className="ml-2 text-red-400 text-xs">
+                        *Required
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center">
-                    {uploadedFiles[doc.id] && uploadedFiles[doc.id].length > 0 ? (
+                    {uploadedFiles[doc.id] &&
+                    uploadedFiles[doc.id].length > 0 ? (
                       <div className="flex items-center text-emerald-400">
                         <CheckCircle className="w-4 h-4 mr-1" />
-                        <span className="text-sm">{uploadedFiles[doc.id].length} file(s)</span>
+                        <span className="text-sm">
+                          {uploadedFiles[doc.id].length} file(s)
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center text-gray-500">
@@ -598,10 +1057,12 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
               />
               <div className="ml-3">
                 <span className="text-white text-sm">
-                  I agree to the terms and conditions and confirm that all information provided is accurate and complete.
+                  I agree to the terms and conditions and confirm that all
+                  information provided is accurate and complete.
                 </span>
                 <p className="text-gray-400 text-xs mt-1">
-                  By submitting this application, you consent to the processing of your data for compliance verification purposes.
+                  By submitting this application, you consent to the processing
+                  of your data for compliance verification purposes.
                 </p>
               </div>
             </label>
@@ -609,7 +1070,7 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
 
           <div className="flex justify-between">
             <button
-              onClick={() => setCurrentStep('documents')}
+              onClick={() => setCurrentStep("documents")}
               className="text-gray-400 hover:text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
               ← Back
@@ -625,183 +1086,169 @@ const SubmitComponent = ({ companyInfo, uploadedFiles, API_BASE, selectedCategor
                   Submitting...
                 </>
               ) : (
-                'Submit Application'
+                "Submit Application"
               )}
             </button>
           </div>
-          {error && (
-            <div className="mt-4 text-red-400 text-sm">{error}</div>
-          )}
+          {error && <div className="mt-4 text-red-400 text-sm">{error}</div>}
         </div>
       </div>
     </div>
   );
-}
+};
 
 // Helper functions used by components
 const getBusinessDescriptionPlaceholder = (businessType: string) => {
   switch (businessType) {
-    case 'manufacturer':
+    case "manufacturer":
       return 'Describe your manufacturing operations (e.g., "We manufacture organic dairy products including milk, cheese, and yogurt. Our facility processes 500L of milk daily with HACCP-certified operations...")';
-    case 'distributor':
+    case "distributor":
       return 'Describe your distribution business (e.g., "We distribute frozen food products across North India, specializing in ice cream and frozen vegetables with cold-chain logistics...")';
-    case 'importer':
+    case "importer":
       return 'Describe your import business (e.g., "We import specialty coffee beans from Colombia and Brazil, focusing on premium arabica varieties for retail and café chains...")';
-    case 'retailer':
+    case "retailer":
       return 'Describe your retail operations (e.g., "We operate a chain of organic food stores selling fresh produce, packaged goods, and health supplements across 5 locations...")';
     default:
-      return 'Describe your business operations, products/services, target market, and key business activities...';
+      return "Describe your business operations, products/services, target market, and key business activities...";
   }
-}
+};
 
 const getBusinessDescriptionHint = (businessType: string) => {
   switch (businessType) {
-    case 'manufacturer':
-      return 'Include: Products manufactured, production capacity, certifications, quality processes';
-    case 'distributor':
-      return 'Include: Product categories, distribution network, storage facilities, target markets';
-    case 'importer':
-      return 'Include: Product types, origin countries, import volume, end customers';
-    case 'retailer':
-      return 'Include: Store locations, product range, customer base, business model';
+    case "manufacturer":
+      return "Include: Products manufactured, production capacity, certifications, quality processes";
+    case "distributor":
+      return "Include: Product categories, distribution network, storage facilities, target markets";
+    case "importer":
+      return "Include: Product types, origin countries, import volume, end customers";
+    case "retailer":
+      return "Include: Store locations, product range, customer base, business model";
     default:
-      return 'Include key business details, products/services, and operational scope';
+      return "Include key business details, products/services, and operational scope";
   }
-}
+};
 
 const Page = () => {
-  const [currentStep, setCurrentStep] = useState('dashboard'); // 'dashboard', 'category', 'company', 'documents', 'submit'
-  const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [currentStep, setCurrentStep] = useState("dashboard"); // 'dashboard', 'category', 'company', 'documents', 'submit'
+  const API_BASE =
+    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5005";
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    name: '',
-    address: '',
-    phone: '',
-    email: '',
-    businessType: '',
-    businessDescription: '',
-    fssaiNumber: '',
-    gstNumber: ''
+    name: "",
+    address: "",
+    phone: "",
+    email: "",
+    businessType: "",
+    businessDescription: "",
+    fssaiNumber: "",
+    gstNumber: "",
   });
-  const [uploadedFiles, setUploadedFiles] = useState<{ [key: string]: File[] }>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState('Most Recent');
+  const [uploadedFiles, setUploadedFiles] = useState<{ [key: string]: File[] }>(
+    {}
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("Most Recent");
   const [showFilters, setShowFilters] = useState(true);
 
   // Mock data for regulations
   const regulations: RegulationCard[] = [
     {
-      id: '1',
-      title: 'New FSSAI Packaging Guidelines for Organic Products',
-      summary: 'Updated labeling requirements for organic food products including mandatory QR codes and traceability information.',
-      impact: 'High',
-      sector: ['Food & Beverages', 'Manufacturing'],
-      date: '2025-08-15',
+      id: "1",
+      title: "New FSSAI Packaging Guidelines for Organic Products",
+      summary:
+        "Updated labeling requirements for organic food products including mandatory QR codes and traceability information.",
+      impact: "High",
+      sector: ["Food & Beverages", "Manufacturing"],
+      date: "2025-08-15",
       views: 1247,
-      status: 'New',
-      tags: ['FSSAI', 'Organic', 'Labeling', 'Compliance']
+      status: "New",
+      tags: ["FSSAI", "Organic", "Labeling", "Compliance"],
     },
     {
-      id: '2',
-      title: 'GST Rate Changes for Healthcare Products',
-      summary: 'Revised GST rates for medical devices and pharmaceutical products effective from September 2025.',
-      impact: 'High',
-      sector: ['Healthcare', 'Finance'],
-      date: '2025-08-14',
+      id: "2",
+      title: "GST Rate Changes for Healthcare Products",
+      summary:
+        "Revised GST rates for medical devices and pharmaceutical products effective from September 2025.",
+      impact: "High",
+      sector: ["Healthcare", "Finance"],
+      date: "2025-08-14",
       views: 892,
-      status: 'Compliance Required',
-      tags: ['GST', 'Healthcare', 'Tax', 'Medical Devices']
+      status: "Compliance Required",
+      tags: ["GST", "Healthcare", "Tax", "Medical Devices"],
     },
     {
-      id: '3',
-      title: 'Export Documentation Updates for Technology Products',
-      summary: 'New export compliance requirements for AI and semiconductor products.',
-      impact: 'Medium',
-      sector: ['Technology', 'Export'],
-      date: '2025-08-13',
+      id: "3",
+      title: "Export Documentation Updates for Technology Products",
+      summary:
+        "New export compliance requirements for AI and semiconductor products.",
+      impact: "Medium",
+      sector: ["Technology", "Export"],
+      date: "2025-08-13",
       views: 634,
-      status: 'Updated',
-      tags: ['Export', 'Technology', 'AI', 'Semiconductors']
-    }
+      status: "Updated",
+      tags: ["Export", "Technology", "AI", "Semiconductors"],
+    },
   ];
 
   const categories = [
-    { id: 'food', name: 'Food & Beverages', icon: '🍽️', color: 'from-emerald-500 to-cyan-500' },
-    { id: 'healthcare', name: 'Healthcare & Pharma', icon: '🏥', color: 'from-blue-500 to-purple-500' },
-    { id: 'technology', name: 'Technology & IT', icon: '💻', color: 'from-purple-500 to-pink-500' },
-    { id: 'finance', name: 'Finance & Banking', icon: '🏦', color: 'from-yellow-500 to-orange-500' },
-    { id: 'export', name: 'Export & Import', icon: '🚢', color: 'from-green-500 to-blue-500' },
-    { id: 'manufacturing', name: 'Manufacturing', icon: '🏭', color: 'from-red-500 to-yellow-500' }
+    {
+      id: "food",
+      name: "Food & Beverages",
+      icon: "🍽️",
+      color: "from-emerald-500 to-cyan-500",
+    },
+    {
+      id: "healthcare",
+      name: "Healthcare & Pharma",
+      icon: "🏥",
+      color: "from-blue-500 to-purple-500",
+    },
+    {
+      id: "technology",
+      name: "Technology & IT",
+      icon: "💻",
+      color: "from-purple-500 to-pink-500",
+    },
+    {
+      id: "finance",
+      name: "Finance & Banking",
+      icon: "🏦",
+      color: "from-yellow-500 to-orange-500",
+    },
+    {
+      id: "export",
+      name: "Export & Import",
+      icon: "🚢",
+      color: "from-green-500 to-blue-500",
+    },
+    {
+      id: "manufacturing",
+      name: "Manufacturing",
+      icon: "🏭",
+      color: "from-red-500 to-yellow-500",
+    },
   ];
-
-  const sectors = ['Food & Beverages', 'Healthcare', 'Technology', 'Finance', 'Export', 'Manufacturing'];
-
-  const foodDocuments = [
-    { id: 'fssai', name: 'FSSAI License Copy', required: true, description: 'Valid FSSAI license with current validity' },
-    { id: 'gst', name: 'GST Certificate', required: true, description: 'GST registration certificate or incorporation certificate' },
-    { id: 'audit', name: 'Food Safety Audit Report', required: false, description: 'Latest food safety audit report (if available)' },
-    { id: 'lab', name: 'Lab Test Report', required: true, description: 'Latest product batch test report' },
-    { id: 'label', name: 'Product Label Design', required: true, description: 'Front and back label design (PDF/PNG)' },
-    { id: 'ingredients', name: 'Ingredient List', required: true, description: 'Complete ingredient list with percentages' },
-    { id: 'nutrition', name: 'Nutritional Information', required: true, description: 'Nutritional facts table' }
-  ];
-
-  const filteredRegulations = regulations.filter(reg => {
-    const matchesSearch = reg.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reg.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reg.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesSector = selectedSectors.length === 0 || reg.sector.some(s => selectedSectors.includes(s));
-    return matchesSearch && matchesSector;
-  });
 
   const handleFileUpload = (documentId: string, files: FileList) => {
     const fileArray = Array.from(files);
-    setUploadedFiles(prev => ({
+    setUploadedFiles((prev) => ({
       ...prev,
-      [documentId]: [...(prev[documentId] || []), ...fileArray]
+      [documentId]: [...(prev[documentId] || []), ...fileArray],
     }));
   };
 
   const removeFile = (documentId: string, fileIndex: number) => {
-    setUploadedFiles(prev => ({
+    setUploadedFiles((prev) => ({
       ...prev,
-      [documentId]: prev[documentId]?.filter((_, index) => index !== fileIndex) || []
+      [documentId]:
+        prev[documentId]?.filter((_, index) => index !== fileIndex) || [],
     }));
   };
-
-  const handleSectorToggle = (sector: string) => {
-    setSelectedSectors(prev =>
-      prev.includes(sector)
-        ? prev.filter(s => s !== sector)
-        : [...prev, sector]
-    );
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'New': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'Updated': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'Compliance Required': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    }
-  };
-
-  const getImpactColor = (impact: string) => {
-    switch (impact) {
-      case 'High': return 'text-red-400';
-      case 'Medium': return 'text-yellow-400';
-      case 'Low': return 'text-green-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-
 
   // Main render logic
   const renderCurrentStep = () => {
     switch (currentStep) {
-      case 'category':
+      case "category":
         return (
           <CategorySelection
             categories={categories}
@@ -810,7 +1257,7 @@ const Page = () => {
             setCurrentStep={setCurrentStep}
           />
         );
-      case 'company':
+      case "company":
         return (
           <CompanyDetails
             companyInfo={companyInfo}
@@ -819,17 +1266,18 @@ const Page = () => {
             setCurrentStep={setCurrentStep}
           />
         );
-      case 'documents':
+      case "documents":
         return (
           <DocumentsUpload
-            foodDocuments={foodDocuments}
             uploadedFiles={uploadedFiles}
             handleFileUpload={handleFileUpload}
             removeFile={removeFile}
             setCurrentStep={setCurrentStep}
+            documents={documentsByCategory[selectedCategory] || []}
+            selectedCategory={selectedCategory}
           />
         );
-      case 'submit':
+      case "submit":
         return (
           <SubmitComponent
             companyInfo={companyInfo}
@@ -840,7 +1288,7 @@ const Page = () => {
             setCompanyInfo={setCompanyInfo}
             setUploadedFiles={setUploadedFiles}
             setSelectedCategory={setSelectedCategory}
-            foodDocuments={foodDocuments}
+            documents={documentsByCategory[selectedCategory] || []}
           />
         );
       default:
@@ -854,7 +1302,6 @@ const Page = () => {
         );
     }
   };
-
   return renderCurrentStep();
 };
 
