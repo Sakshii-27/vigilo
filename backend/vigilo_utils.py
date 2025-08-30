@@ -70,6 +70,26 @@ vector_store = Chroma(
 )
 
 # Company data stored as JSON only (no vector DB per requirements)
+METADATA_RBI_FILE = os.path.join(DATA_DIR, "metadataRBI.json")
+
+def load_rbi_metadata() -> List[Dict]:
+    """Load RBI-specific metadata"""
+    if os.path.exists(METADATA_RBI_FILE):
+        try:
+            with open(METADATA_RBI_FILE, 'r') as f:
+                content = f.read().strip()
+                if not content:  # Handle empty file
+                    return []
+                return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: Error loading RBI metadata, creating fresh: {e}")
+            return []
+    return []
+
+def save_rbi_metadata(metadata: List[Dict]):
+    """Save RBI-specific metadata"""
+    with open(METADATA_RBI_FILE, 'w') as f:
+        json.dump(metadata, f, indent=2)
 
 def load_metadata() -> List[Dict]:
     if os.path.exists(METADATA_FILE):
@@ -85,7 +105,7 @@ def get_pdf_filename(url: str, title: str) -> str:
     """Generate consistent PDF filename from URL and title"""
     url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
     # Clean title to make it filesystem-safe
-    clean_title = re.sub(r'[^\w\-_\. ]', '_', title)[:50]
+    clean_title = re.sub(r'[^\w\-\. ]', '', title)[:50]
     return f"{clean_title}_{url_hash}.pdf"
 
 def extract_date_from_text(text: str) -> str:
@@ -93,6 +113,41 @@ def extract_date_from_text(text: str) -> str:
     match = re.search(r'\[Uploaded on : (\d{2}-\d{2}-\d{4})\]', text)
     if match:
         return match.group(1)
+    return "Unknown"
+
+def extract_date_from_rbi_text(text: str) -> str:
+    """Extract date from RBI format - handles multiple formats"""
+    if not text:
+        return "Unknown"
+    
+    # Try formats like "Aug 25, 2025" or "August 25, 2025"
+    match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})', text, re.IGNORECASE)
+    if match:
+        month_name, day, year = match.groups()
+        month_num = {
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+            'may': '05', 'jun': '06', 'jul': '07', 'aug': '08', 
+            'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+        }
+        return f"{int(day):02d}-{month_num[month_name.lower()[:3]]}-{year}"
+    
+    # Try full month name format
+    match = re.search(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})', text, re.IGNORECASE)
+    if match:
+        month_name, day, year = match.groups()
+        month_num = {
+            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+            'may': '05', 'june': '06', 'july': '07', 'august': '08', 
+            'september': '09', 'october': '10', 'november': '11', 'december': '12'
+        }
+        return f"{int(day):02d}-{month_num[month_name.lower()]}-{year}"
+    
+    # Try DD-MM-YYYY format
+    match = re.search(r'(\d{1,2})-(\d{1,2})-(\d{4})', text)
+    if match:
+        day, month, year = match.groups()
+        return f"{int(day):02d}-{int(month):02d}-{year}"
+    
     return "Unknown"
 
 def scrape_fssai_notifications() -> List[Dict]:
@@ -164,6 +219,104 @@ def scrape_fssai_page(url: str, headers: dict) -> List[Dict]:
     except Exception as e:
         print(f"Error scraping FSSAI page {url}: {e}")
         return []
+
+def scrape_rbi_notifications() -> List[Dict]:
+    """Scrape RBI notifications page for PDF documents - simplified approach"""
+    base_url = "https://www.rbi.org.in/Scripts/NotificationUser.aspx"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    try:
+        notifications = []
+        
+        # Scrape the main notifications page
+        notifications.extend(scrape_rbi_page(base_url, headers))
+        
+        
+        return notifications
+        
+    except Exception as e:
+        print(f"Error scraping RBI notifications: {e}")
+        return []
+
+def scrape_rbi_page(url: str, headers: dict) -> List[Dict]:
+    """Scrape RBI notifications page with correct selectors for PDF/PNG notifications"""
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        notifications = []
+        current_date = "Unknown"
+
+        print("DEBUG: Starting RBI scraping...")
+
+        # RBI notifications are grouped in div#pnlDetails
+        content_area = soup.find("div", id="pnlDetails") or soup.find("div", class_="content_area")
+        if not content_area:
+            print("DEBUG: No content area found")
+            return notifications
+
+        tables = content_area.find_all("table")
+        print(f"DEBUG: Found {len(tables)} tables in content area")
+
+        for table in tables:
+            rows = table.find_all("tr")
+
+            for row in rows:
+                # Date header row
+                date_header = row.find("td", class_="tableheader")
+                if date_header:
+                    date_text = date_header.get_text(strip=True)
+                    current_date = extract_date_from_rbi_text(date_text)
+                    print(f"DEBUG: Found date header: {date_text} -> {current_date}")
+                    continue
+
+                # Look for RBI's <a id="APDF_..."> links (they may end with .pdf OR .png)
+                pdf_links = row.find_all("a", id=lambda v: v and v.startswith("APDF_"))
+                for a in pdf_links:
+                    href = a.get("href")
+                    if not href:
+                        continue
+
+                    # Normalize URL
+                    pdf_url = href
+                    if not pdf_url.startswith("http"):
+                        if pdf_url.startswith("//"):
+                            pdf_url = f"https:{pdf_url}"
+                        elif pdf_url.startswith("/"):
+                            pdf_url = f"https://www.rbi.org.in{pdf_url}"
+                        else:
+                            pdf_url = f"https://www.rbi.org.in/{pdf_url}"
+
+                    # Title extraction: use the nearest preceding <td> with text, fallback generic
+                    title_cell = row.find("td", style=lambda x: x and 'word-wrap:break-word' in x)
+                    if title_cell:
+                        title = title_cell.get_text(strip=True)
+                    else:
+                        title = "RBI Notification"
+
+                    # Clean title
+                    title = re.sub(r'\s*\d+\s*[Kk][Bb]\s*$', '', title).strip()
+
+                    notifications.append({
+                        "title": title,
+                        "pdf_url": pdf_url,
+                        "date": current_date,
+                        "source": "RBI"
+                    })
+                    print(f"DEBUG: Added notification: {title} -> {pdf_url}")
+
+        print(f"DEBUG: Total notifications found: {len(notifications)}")
+        return notifications
+
+    except Exception as e:
+        print(f"Error scraping RBI page {url}: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+    
 
 def download_pdf(url: str, filename: str) -> str:
     """Download PDF if not already exists"""
@@ -280,7 +433,7 @@ def update_vector_db() -> int:
         }
         
         print("Chunking text and adding to vector store")
-        documents = chunk_text(text, metadata)
+        documents = chunk_text(text, sanitize_metadata(metadata))
         vector_store.add_documents(documents)
         
         # Update metadata
@@ -294,6 +447,53 @@ def update_vector_db() -> int:
         vector_store.persist()
     
     return new_count
+
+def update_rbi_only() -> int:
+    """Update only RBI notifications without affecting FSSAI"""
+    print("Starting RBI-only update process...")
+    existing_rbi_metadata = load_rbi_metadata()
+    existing_urls = {item["pdf_url"] for item in existing_rbi_metadata}
+    
+    rbi_notifications = scrape_rbi_notifications()
+    print(f"Found {len(rbi_notifications)} RBI notifications")
+    
+    new_count = 0
+    
+    for notification in rbi_notifications:
+        if notification["pdf_url"] in existing_urls:
+            continue
+            
+        filename = get_pdf_filename(notification["pdf_url"], notification["title"])
+        pdf_path = download_pdf(notification["pdf_url"], filename)
+        
+        if not pdf_path:
+            continue
+            
+        text = extract_text_from_pdf(pdf_path)
+        if not text:
+            continue
+            
+        metadata = {
+            "title": notification["title"],
+            "date": notification["date"],
+            "source": notification["source"],
+            "pdf_url": notification["pdf_url"],
+            "pdf_path": pdf_path,
+            "document_id": hashlib.md5(notification["pdf_url"].encode()).hexdigest()
+        }
+        
+        documents = chunk_text(text, sanitize_metadata(metadata))
+        vector_store.add_documents(documents)
+        existing_rbi_metadata.append(metadata)
+        new_count += 1
+    
+    if new_count > 0:
+        print(f"Saving {new_count} new RBI entries")
+        save_rbi_metadata(existing_rbi_metadata)
+        vector_store.persist()
+    
+    return new_count
+
 
 def get_metadata_store() -> List[Dict]:
     """Get all stored metadata"""
@@ -323,6 +523,21 @@ def get_latest_amendments(limit: int = 6) -> List[Dict]:
             "date": m.get("date", "Unknown"),
             "content": content,
             "id": m.get("document_id") or hashlib.md5(m.get("pdf_url", "").encode()).hexdigest()
+        })
+    return results
+def get_latest_rbi_amendments(limit: int = 6) -> List[Dict]:
+    """Return latest RBI amendments only"""
+    meta = load_rbi_metadata()
+    meta_sorted = sorted(meta, key=lambda m: _parse_date(m.get("date", "")), reverse=True)
+    results: List[Dict] = []
+    for m in meta_sorted[:limit]:
+        content = extract_text_from_pdf(m.get("pdf_path", ""))
+        results.append({
+            "title": m.get("title", ""),
+            "date": m.get("date", "Unknown"),
+            "content": content,
+            "id": m.get("document_id"),
+            "source": "RBI"
         })
     return results
 

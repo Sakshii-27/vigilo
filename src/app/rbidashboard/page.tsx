@@ -94,18 +94,17 @@ export default function FinanceDashboardPage() {
     return () => clearTimeout(notificationTimer);
   }, []);
 
-  // Load amendments from backend
-  useEffect(() => {
-  const loadAmendments = async () => {
+useEffect(() => {
+  const loadRBIAmendments = async () => {
     const loadingMessages = [
-        "Initializing Indian regulatory compliance dashboard...",
-        "Fetching your NBFC/Bank profile...",
-        "Analyzing your investment products and AUM...", 
-        "Scanning latest RBI/SEBI/NPCI circulars...",
-        "Cross-referencing with your regulatory filings...",
-        "Evaluating KYC/AML compliance requirements...",
-        "Loading personalized compliance insights..."
-      ];
+      "Initializing RBI compliance dashboard...",
+      "Fetching RBI notification database...",
+      "Scanning latest RBI circulars...", 
+      "Analyzing banking regulations...",
+      "Cross-referencing financial compliance...",
+      "Evaluating regulatory updates...",
+      "Loading RBI compliance insights..."
+    ];
 
     // Simulate loading with dynamic messages
     for (let i = 0; i < loadingMessages.length; i++) {
@@ -114,114 +113,37 @@ export default function FinanceDashboardPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/list`);
+      // Use the RBI-specific endpoint
+      const res = await fetch(`${API_BASE}/list-rbi`);
       if (res.ok) {
         const json = await res.json();
-        // Indian financial regulatory amendments
-        const indianFinanceAmendments = [
-            { 
-              title: "RBI Digital Lending Guidelines 2025", 
-              date: "2025-08-20", 
-              source: "RBI", 
-              document_id: "rbi-digital-lending-2025-001",
-              summary: "Mandatory requirements for all digital lending apps including LSPs. Cooling-off period for loans, direct disbursement to borrower accounts only.",
-              impact: "All NBFCs and fintech lenders must implement new borrower protection measures by Sept 30, 2025"
-            },
-            { 
-              title: "SEBI T+0 Settlement Cycle Implementation", 
-              date: "2025-08-15", 
-              source: "SEBI", 
-              document_id: "sebi-t0-settlement-2025-002",
-              summary: "Optional same-day settlement for equity cash segment trades up to ₹2 lakh per client per day.",
-              impact: "Brokers and depositories need to upgrade systems for instant settlement capability"
-            },
-            { 
-              title: "NPCI UPI Transaction Limit Enhancement", 
-              date: "2025-08-10", 
-              source: "NPCI", 
-              document_id: "npci-upi-limit-2025-003",
-              summary: "UPI transaction limit increased to ₹5 lakh for capital markets and ₹10 lakh for tax payments.",
-              impact: "Payment aggregators and PSPs must update transaction processing systems"
-            },
-            { 
-              title: "RBI Master Direction on KYC Updates", 
-              date: "2025-07-25", 
-              source: "RBI", 
-              document_id: "rbi-kyc-master-2025-004",
-              summary: "Video-based Customer Identification Process (V-CIP) made mandatory for onboarding high-value customers remotely.",
-              impact: "Banks and NBFCs must integrate V-CIP within 60 days for accounts above ₹50 lakh"
-            },
-            { 
-              title: "SEBI Algo Trading Framework for Retail", 
-              date: "2025-07-20", 
-              source: "SEBI", 
-              document_id: "sebi-algo-retail-2025-005",
-              summary: "API access for retail algo trading with mandatory two-factor authentication and risk management protocols.",
-              impact: "Brokers offering algo trading must implement new API security standards and audit trails"
-            },
-            { 
-              title: "RBI Guidelines on Default Loss Guarantee", 
-              date: "2025-07-15", 
-              source: "RBI", 
-              document_id: "rbi-dlg-2025-006",
-              summary: "First Loss Default Guarantee (FLDG) arrangements capped at 5% of loan portfolio for NBFC-Fintech partnerships.",
-              impact: "All existing FLDG arrangements must be restructured to comply with the 5% cap"
-            },
-            { 
-              title: "SEBI ESG Disclosure Norms for Listed Entities", 
-              date: "2025-06-30", 
-              source: "SEBI", 
-              document_id: "sebi-esg-brsr-2025-007",
-              summary: "Top 1000 listed companies by market cap must file comprehensive BRSR Core disclosures with limited assurance.",
-              impact: "Listed companies need ESG data management systems and third-party assurance by FY 2025-26"
-            },
-            { 
-              title: "NPCI Bharat BillPay Connect Guidelines", 
-              date: "2025-06-25", 
-              source: "NPCI", 
-              document_id: "npci-bbps-2025-008",
-              summary: "All recurring payment mandates above ₹15,000 require additional authentication factor.",
-              impact: "Billers and payment aggregators must implement enhanced authentication for high-value mandates"
-            },
-            { 
-              title: "RBI Scale Based Regulation for NBFCs", 
-              date: "2025-06-15", 
-              source: "RBI", 
-              document_id: "rbi-nbfc-sbr-2025-009",
-              summary: "Upper Layer NBFCs must maintain CRAR of 11% and implement Core Financial Services Solution by Oct 2025.",
-              impact: "NBFCs with assets > ₹5000 Cr must upgrade capital adequacy and implement CFSS"
-            },
-            { 
-              title: "SEBI Delisting Regulations Amendment", 
-              date: "2025-06-10", 
-              source: "SEBI", 
-              document_id: "sebi-delisting-2025-010",
-              summary: "Fixed price delisting mechanism introduced; counter-offer by public shareholders allowed up to 10% premium.",
-              impact: "Companies planning delisting must follow new fixed price or book building process with enhanced minority protection"
-            }
-          ];
-          setAmendments(indianFinanceAmendments);
-        }
-      } catch (err) {
-        console.error("Failed to load amendments:", err);
-      }
-    
-    setPageLoading(false);
-    setIntroLoading(false);
+        setAmendments((json as MetaItem[]).slice(0, 10));
+        
+        // Count RBI amendments for the notification
+        const rbiCount = json.length;
+        
+        setPageLoading(false);
+        setIntroLoading(false);
 
-    // Show welcome notifications after loading
-    setTimeout(() => {
-      setNotifications(prev => [
-        ...prev,
-        {
-          id: 'dashboard-loaded',
-          message: 'Dashboard loaded! Found 15 relevant amendments for your firm',
-          type: 'update'
-        }
-      ]);
-    }, 2000);
+        // Show welcome notifications after loading
+        setTimeout(() => {
+          setNotifications(prev => [
+            ...prev,
+            {
+              id: 'rbi-dashboard-loaded',
+              message: `RBI Dashboard loaded! Found ${rbiCount} RBI notifications`,
+              type: 'update'
+            }
+          ]);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Failed to load RBI amendments:", err);
+      setPageLoading(false);
+      setIntroLoading(false);
+    }
   };
-  loadAmendments();
+  loadRBIAmendments();
 }, [API_BASE]);
 
 const filteredAmendments = useMemo(() => {
