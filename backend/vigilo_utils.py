@@ -60,6 +60,8 @@ PDF_DIR = os.path.join(DATA_DIR, "pdfs")
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.json")
 os.makedirs(PDF_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+RBI_PDF_DIR = os.path.join(DATA_DIR, "rbi-pdf")
+os.makedirs(RBI_PDF_DIR, exist_ok=True)
 
 # Initialize vector stores
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -318,9 +320,11 @@ def scrape_rbi_page(url: str, headers: dict) -> List[Dict]:
         return []
     
 
-def download_pdf(url: str, filename: str) -> str:
-    """Download PDF if not already exists"""
-    path = os.path.join(PDF_DIR, filename)
+def download_pdf(url: str, filename: str, target_dir: str = PDF_DIR) -> str:
+    """Download PDF if not already exists to the specified directory.
+    Defaults to FSSAI PDF_DIR for backward compatibility.
+    """
+    path = os.path.join(target_dir, filename)
     if not os.path.exists(path):
         try:
             headers = {
@@ -464,15 +468,13 @@ def update_rbi_only() -> int:
             continue
             
         filename = get_pdf_filename(notification["pdf_url"], notification["title"])
-        pdf_path = download_pdf(notification["pdf_url"], filename)
+        pdf_path = download_pdf(notification["pdf_url"], filename, target_dir=RBI_PDF_DIR)
         
         if not pdf_path:
             continue
             
         text = extract_text_from_pdf(pdf_path)
-        if not text:
-            continue
-            
+        
         metadata = {
             "title": notification["title"],
             "date": notification["date"],
@@ -482,8 +484,10 @@ def update_rbi_only() -> int:
             "document_id": hashlib.md5(notification["pdf_url"].encode()).hexdigest()
         }
         
-        documents = chunk_text(text, sanitize_metadata(metadata))
-        vector_store.add_documents(documents)
+        # Only add to vector store if text was extracted, but always save metadata
+        if text:
+            documents = chunk_text(text, sanitize_metadata(metadata))
+            vector_store.add_documents(documents)
         existing_rbi_metadata.append(metadata)
         new_count += 1
     

@@ -14,6 +14,10 @@ from vigilo_utils import (
     get_company_info,
     get_company_products,
     ingest_local_pdfs_from,
+    get_latest_company_id,
+    update_rbi_only,
+    load_rbi_metadata,
+    get_latest_rbi_amendments,
 )
 from typing import List, Dict, Optional
 from fastapi import UploadFile, Form, File, HTTPException
@@ -44,6 +48,30 @@ def update() -> Dict[str, int]:
     count = update_vector_db()
     return {"new_entries": count}
 
+@app.get("/update-rbi")
+def update_rbi() -> Dict[str, int]:
+    """Update only RBI notifications"""
+    count = update_rbi_only()
+    return {"new_entries": count, "source": "RBI"}
+
+@app.get("/list-rbi")
+def list_rbi_notifications() -> List[Dict]:
+    """Get only RBI notifications"""
+    data = load_rbi_metadata()
+    if not data:
+        # Attempt to populate if empty
+        try:
+            update_rbi_only()
+            data = load_rbi_metadata()
+        except Exception:
+            pass
+    return data
+
+@app.get("/amendments-rbi")
+def get_rbi_amendments(limit: int = 6) -> List[Dict]:
+    """Get latest RBI amendments only"""
+    return get_latest_rbi_amendments(limit)
+
 @app.get("/list")
 def list_notifications() -> List[Dict]:
     return get_metadata_store()
@@ -52,6 +80,11 @@ def list_notifications() -> List[Dict]:
 def test_scrape():
     from vigilo_utils import scrape_fssai_notifications
     return scrape_fssai_notifications()
+
+@app.get("/test-scrape-rbi")
+def test_scrape_rbi():
+    from vigilo_utils import scrape_rbi_notifications
+    return scrape_rbi_notifications()
 
 @app.get("/seed/synthetic")
 def seed_synthetic() -> Dict[str, int]:
@@ -88,7 +121,11 @@ async def submit_company_data(
     label_front: Optional[UploadFile] = File(None),
     label_back: Optional[UploadFile] = File(None),
     expiry_format: str = Form("DD/MM/YYYY"),
-    claims: str = Form("")        # Comma-separated
+    claims: str = Form(""),        # Comma-separated
+
+    # Additional product documents
+    ingredients_file: Optional[UploadFile] = File(None),
+    nutrition_file: Optional[UploadFile] = File(None),
 ):
     # Save uploaded files
     def save_file(file: UploadFile) -> str:
@@ -158,78 +195,48 @@ async def submit_company_data(
             issue_date=date.today()
         ))
 
+    # Optional product/packaging-related PDFs
+    if ingredients_file:
+        company_data.legal_documents.append(ComplianceDocument(
+            document_type="Ingredients Document",
+            file_path=save_file(ingredients_file),
+            issue_date=date.today()
+        ))
+    if nutrition_file:
+        company_data.legal_documents.append(ComplianceDocument(
+            document_type="Nutritional Information Document",
+            file_path=save_file(nutrition_file),
+            issue_date=date.today()
+        ))
+
     store_company_data(company_data)
     return {"status": "success", "company_id": hash_company(company_name)}
 
 @app.get("/compliance/check")
 async def check_company_compliance(company_id: str):
-    """Endpoint triggering the full analysis pipeline"""
+    """Run the new 5-stage prompt chain for a company.
+
+    This uses:
+    - First 5 PDFs from backend/data/pdfs as amendments
+    - Company info from backend/data/companies/<company_id>.json
+    - First 2 and next 3 PDFs from backend/data/uploads as company docs
+    Logs are saved under backend/data/logs/<company_id>/<timestamp>/
+    """
     try:
-        analysis = analyze_amendments_for_company(company_id)
-        return {"status": "success", "analysis": analysis}
+        result = analyze_amendments_for_company(company_id)
+        return {"status": "success", "result": result}
     except Exception as e:
-        # Fallback: return a minimal analysis using raw amendments without LLM
-        try:
-            amendments = get_latest_amendments(limit=5)
-            company = get_company_info(company_id) or {"name": company_id}
-            # naive summaries
-            detailed = []
-            for a in amendments:
-                content = a.get("content", "")
-                summary = (content[:400] + "...") if len(content) > 400 else content
-                detailed.append({
-                    "title": a.get("title", "Amendment"),
-                    "date": a.get("date", ""),
-                    "summary": summary,
-                    "actions": [
-                        "Review amendment text",
-                        "Assess applicability to your products/processes",
-                        "Update SOP/labels if required"
-                    ]
-                })
-            fallback = {
-                "analysis_steps": [
-                    {"stage": "fallback", "note": f"LLM unavailable: {str(e)}"}
-                ],
-                "initial_amendments": len(amendments),
-                "relevant_amendments": len(detailed),
-                "compliance_plan": {
-                    "status": "partial",
-                    "notes": "LLM analysis unavailable; provided heuristic summaries",
-                    "next_steps": [
-                        "Enable GROQ_API_KEY and rerun for detailed plan",
-                        "Manually validate listed actions"
-                    ]
-                },
-                "detailed_amendments": detailed
-            }
-            return {"status": "success", "analysis": fallback}
-        except Exception as inner:
-            raise HTTPException(status_code=400, detail=f"Compliance check failed: {inner}")
+        # Provide a clear error with hint
+        raise HTTPException(status_code=400, detail=f"Compliance check failed: {e}")
 
 def analyze_amendments_for_company(company_id: str) -> Dict:
-    """Run the full prompt chain against latest amendments and company data"""
-    # 1) Load data
-    amendments = get_latest_amendments(limit=5)
+    """Run the new 5-stage prompt chain using on-disk PDFs and company uploads."""
     company = get_company_info(company_id)
-    products = get_company_products(company_id)
     if not company:
         raise ValueError("Company not found. Submit company data first.")
-    if not amendments:
-        # allow empty to still run with mock minimal to avoid crash
-        amendments = [{
-            "title": "No Amendments Found",
-            "date": "",
-            "content": "",
-        }]
-    # 2) Run chain
-    analyzer = AmendmentAnalyzer()
-    results = analyzer.run_full_analysis(
-        amendments=amendments,
-        company_data=company,
-        products=products[:4] if products else []
-    )
-    return results
+    uploads_dir = os.path.join(os.path.dirname(__file__), "data", "uploads")
+    analyzer = AmendmentAnalyzer(company_id=company_id)
+    return analyzer.run_full_chain(company, uploads_dir=uploads_dir)
 
 @app.get("/pdf")
 def get_pdf(document_id: str):
@@ -237,6 +244,10 @@ def get_pdf(document_id: str):
     try:
         meta = get_metadata_store()
         match = next((m for m in meta if (m.get("document_id") == document_id)), None)
+        # If not found in FSSAI metadata, look in RBI metadata
+        if not match:
+            rbi_meta = load_rbi_metadata()
+            match = next((m for m in rbi_meta if (m.get("document_id") == document_id)), None)
         if not match:
             raise HTTPException(status_code=404, detail="Document not found")
         path = match.get("pdf_path")
@@ -252,9 +263,15 @@ def get_pdf(document_id: str):
         return FileResponse(path, media_type="application/pdf", filename=fname)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error serving PDF: {e}")
 
+@app.get("/company/latest")
+def latest_company():
+    """Return the latest company's id and brief info. Frontend uses this to run compliance."""
+    cid = get_latest_company_id()
+    if not cid:
+        raise HTTPException(status_code=404, detail="No companies found")
+    info = get_company_info(cid)
+    return {"company_id": cid, "company_info": info}
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=5005)

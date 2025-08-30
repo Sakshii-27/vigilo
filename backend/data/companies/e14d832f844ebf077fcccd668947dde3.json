@@ -1,0 +1,31 @@
+{
+  "company_info": {
+    "company_name": "hshs",
+    "address": "",
+    "fssai_license": "",
+    "fssai_validity": "2025-08-30",
+    "business_type": "",
+    "gst_number": "",
+    "incorporation_number": null
+  },
+  "legal_documents": [],
+  "products": [
+    {
+      "product_name": "Default Product",
+      "category": "finance",
+      "ingredients": {},
+      "nutritional_info": {},
+      "allergens": [],
+      "batch_number": null
+    }
+  ],
+  "packaging": [
+    {
+      "label_front_url": "",
+      "label_back_url": "",
+      "expiry_format": "DD/MM/YYYY",
+      "packaging_claims": []
+    }
+  ],
+  "optional_data": null
+}
