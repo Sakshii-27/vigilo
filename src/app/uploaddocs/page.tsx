@@ -195,16 +195,16 @@ const documentsByCategory: Record<
       description: "Last 2 years of income tax returns",
     },
     {
-      id: "boardResolution",
-      label: "Board Resolution",
+      id: "kycPolicy",
+      label: "KYC/AML Policy",
       required: false,
-      description: "Board resolution approving financial operations",
+      description: "Company’s documented policy on customer verification and anti-money laundering measures",
     },
     {
-      id: "shareholdingPattern",
-      label: "Shareholding Pattern",
+      id: "auditReport",
+      label: "IT/System Audit Report",
       required: false,
-      description: "Current shareholding structure of the company",
+      description: "Most recent report on IT systems and security compliance",
     },
   ],
 
