@@ -10,16 +10,18 @@ from vigilo_utils import (
     ProductInfo,
     PackagingInfo,
     hash_company,
-    get_latest_amendments,
     get_company_info,
-    get_company_products,
     ingest_local_pdfs_from,
     get_latest_company_id,
     update_rbi_only,
     load_rbi_metadata,
     get_latest_rbi_amendments,
+    update_dgft_only,
+    load_dgft_metadata,
+    update_gst_only,
+    load_gst_metadata
 )
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from fastapi import UploadFile, Form, File, HTTPException
 from datetime import date
 import hashlib
@@ -86,6 +88,11 @@ def test_scrape_rbi():
     from vigilo_utils import scrape_rbi_notifications
     return scrape_rbi_notifications()
 
+@app.get("/test-scrape-dgft")
+def test_scrape_dgft():
+    from vigilo_utils import scrape_dgft_notifications
+    return scrape_dgft_notifications()
+
 @app.get("/seed/synthetic")
 def seed_synthetic() -> Dict[str, int]:
     """Ingest local PDFs from synthetic_pdfs_detailed/ for quick testing."""
@@ -93,6 +100,49 @@ def seed_synthetic() -> Dict[str, int]:
     dir_path = os.path.join(base_dir, "synthetic_pdfs_detailed")
     added = ingest_local_pdfs_from(dir_path)
     return {"ingested": added}
+
+@app.get("/update-dgft")
+def update_dgft() -> Dict[str, Any]:  
+    count = update_dgft_only()
+    return {"new_entries": count, "source": "DGFT"}
+
+@app.get("/list-dgft")
+def list_dgft_notifications() -> List[Dict]:
+    """Get only DGFT notifications"""
+    # You'll need to implement load_dgft_metadata() similar to load_rbi_metadata()
+    data = load_dgft_metadata()
+    if not data:
+        # Attempt to populate if empty
+        try:
+            update_dgft_only()
+            data = load_dgft_metadata()
+        except Exception:
+            pass
+    return data
+
+@app.get("/update-gst")
+def update_gst() -> Dict[str, Any]:
+    """Update only GST notifications"""
+    count = update_gst_only()
+    return {"new_entries": count, "source": "GST"}
+
+@app.get("/list-gst")
+def list_gst_notifications() -> List[Dict]:
+    """Get only GST notifications"""
+    data = load_gst_metadata()
+    if not data:
+        try:
+            update_gst_only()
+            data = load_gst_metadata()
+        except Exception:
+            pass
+    return data
+
+@app.get("/test-scrape-gst")
+def test_scrape_gst():
+    """Test GST scraping"""
+    from vigilo_utils import scrape_gst_notifications
+    return scrape_gst_notifications()
 
 @app.post("/company/submit")
 async def submit_company_data(

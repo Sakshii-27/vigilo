@@ -2,7 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import pdfplumber
-from datetime import datetime
+from datetime import datetime, time
 from typing import List, Dict
 import hashlib
 import json
@@ -73,6 +73,10 @@ vector_store = Chroma(
 
 # Company data stored as JSON only (no vector DB per requirements)
 METADATA_RBI_FILE = os.path.join(DATA_DIR, "metadataRBI.json")
+
+METADATA_DGFT_FILE = os.path.join(DATA_DIR, "metadataDGFT.json")
+
+METADATA_GST_FILE = os.path.join(DATA_DIR, "metadataGST.json")
 
 def load_rbi_metadata() -> List[Dict]:
     """Load RBI-specific metadata"""
@@ -698,3 +702,443 @@ def get_latest_company_id() -> Optional[str]:
         return latest_id
     except Exception:
         return None
+
+def extract_date_from_dgft_text(text: str) -> str:
+    """Try common DGFT date formats, fallback Unknown"""
+    if not text:
+        return "Unknown"
+    # common DD-MM-YYYY pattern
+    m = re.search(r'(\d{2}-\d{2}-\d{4})', text)
+    if m:
+        return m.group(1)
+    # Try other formats like '14 Aug 2025' or 'August 14, 2025'
+    m = re.search(r'(\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})', text, re.IGNORECASE)
+    if m:
+        try:
+            dt = datetime.strptime(m.group(1), "%d %b %Y")
+            return dt.strftime("%d-%m-%Y")
+        except Exception:
+            pass
+    return "Unknown"
+
+def scrape_dgft_notifications() -> List[Dict]:
+    """Scrape DGFT notifications table and return list of {number, year, description, date, pdf_url, source}"""
+    base_url = "https://www.dgft.gov.in/CP/?opt=notification"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    try:
+        r = requests.get(base_url, headers=headers, timeout=30)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        notifications = []
+        table = soup.find("table", id="metaTable")
+        if not table:
+            # Some pages may render differently; try any table with class or fallback to rows
+            table = soup.find("table")
+            if not table:
+                print("DGFT: no table found")
+                return notifications
+
+        tbody = table.find("tbody") or table
+        rows = tbody.find_all("tr")
+        for row in rows:
+            cells = row.find_all("td")
+            if len(cells) < 6:
+                continue
+            # columns: 0 Sl.No, 1 Number, 2 Year, 3 Description, 4 Date, 5 CRT DT (hidden), 6 Attachment
+            number = cells[1].get_text(strip=True)
+            year = cells[2].get_text(strip=True)
+            description = cells[3].get_text(" ", strip=True)
+            date_str = cells[4].get_text(strip=True) or extract_date_from_dgft_text(description)
+
+            # Attachment might be in the last cell (find a link ending with .pdf)
+            pdf_url = ""
+            # Some DGFT attachments are anchors with href in the last cell
+            attach_cell = None
+            # prefer the last cell if it contains link
+            for c in cells[::-1]:
+                if c.find("a"):
+                    attach_cell = c
+                    break
+            if attach_cell:
+                a = attach_cell.find("a", href=True)
+                if a:
+                    pdf_url = a["href"]
+                    if not pdf_url.startswith("http"):
+                        # make absolute
+                        if pdf_url.startswith("/"):
+                            pdf_url = f"https://www.dgft.gov.in{pdf_url}"
+                        else:
+                            pdf_url = f"https://www.dgft.gov.in/{pdf_url}"
+
+            notifications.append({
+                "number": number,
+                "year": year,
+                "description": description,
+                "date": date_str,
+                "pdf_url": pdf_url,
+                "source": "DGFT"
+            })
+        return notifications
+    except Exception as e:
+        print(f"Error scraping DGFT: {e}")
+        return []
+
+def update_dgft_only(target_pdf_dir: str = None) -> int:
+    """Download new DGFT notifications, ingest into vector DB and update DGFT metadata"""
+    target_pdf_dir = target_pdf_dir or os.path.join(DATA_DIR, "dgft-pdfs")
+    os.makedirs(target_pdf_dir, exist_ok=True)
+
+    existing = load_dgft_metadata()  # Use DGFT metadata instead of general metadata
+    existing_urls = {m.get("pdf_url") for m in existing}
+    new_count = 0
+
+    notifications = scrape_dgft_notifications()
+    print(f"DGFT: found {len(notifications)} notifications")
+
+    for n in notifications:
+        pdf_url = n.get("pdf_url")
+        if not pdf_url:
+            continue
+        if pdf_url in existing_urls:
+            continue
+
+        filename = get_pdf_filename(pdf_url, n.get("description", "dgft_notification"))
+        pdf_path = download_pdf(pdf_url, filename, target_dir=target_pdf_dir)
+        
+        if not pdf_path:
+            continue
+
+        text = extract_text_from_pdf(pdf_path)
+        metadata = {
+            "title": f"DGFT Notification {n.get('number')} / {n.get('year')}",
+            "number": n.get("number"),
+            "year": n.get("year"),
+            "description": n.get("description"),
+            "date": n.get("date") or "Unknown",
+            "source": "DGFT",
+            "pdf_url": pdf_url,
+            "pdf_path": pdf_path,
+            "document_id": hashlib.md5(pdf_url.encode()).hexdigest()
+        }
+
+        if text:
+            docs = chunk_text(text, sanitize_metadata(metadata))
+            vector_store.add_documents(docs)
+
+        existing.append(metadata)
+        new_count += 1
+
+    if new_count:
+        save_dgft_metadata(existing)  # Save to DGFT-specific metadata
+
+    return new_count
+
+def load_dgft_metadata() -> List[Dict]:
+    """Load DGFT-specific metadata"""
+    if os.path.exists(METADATA_DGFT_FILE):
+        try:
+            with open(METADATA_DGFT_FILE, 'r') as f:
+                content = f.read().strip()
+                if not content:  # Handle empty file
+                    return []
+                return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: Error loading DGFT metadata, creating fresh: {e}")
+            return []
+    return []
+
+def save_dgft_metadata(metadata: List[Dict]):
+    """Save DGFT-specific metadata"""
+    with open(METADATA_DGFT_FILE, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+def scrape_gst_notifications() -> List[Dict]:
+    """Scrape GST Council notifications with pagination"""
+    base_url = "https://gstcouncil.gov.in/cgst-tax-notification"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    notifications = []
+    page = 0
+    max_pages = 10  # Limit to prevent infinite looping
+    
+    try:
+        while page < max_pages:
+            url = f"{base_url}?page={page}"
+            print(f"Scraping GST page {page}: {url}")
+            
+            r = requests.get(url, headers=headers, timeout=30)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+            
+            # Find the notifications table
+            table = soup.find("tbody")
+            if not table:
+                print(f"No table found on page {page}, stopping")
+                break
+            
+            rows = table.find_all("tr")
+            if not rows:
+                print(f"No rows found on page {page}, stopping")
+                break
+            
+            page_notifications = []
+            
+            for row in rows:
+                try:
+                    # Extract data from each column
+                    cells = row.find_all("td")
+                    if len(cells) < 5:
+                        continue
+                    
+                    # Column 1: Counter (we'll ignore this)
+                    # Column 2: Notification number and date
+                    notification_info = cells[1].get_text(strip=True)
+                    
+                    # Column 3: English PDF link
+                    english_link = cells[2].find("a")
+                    english_url = english_link.get("href") if english_link else None
+                    
+                    # Column 4: Hindi PDF link (we'll use English version)
+                    # Column 5: Description
+                    description = cells[4].get_text(strip=True)
+                    
+                    if english_url:
+                        # Make URL absolute
+                        if not english_url.startswith("http"):
+                            english_url = f"https://gstcouncil.gov.in{english_url}"
+                        
+                        # Extract date from notification info if possible
+                        date_text = "Unknown"
+                        date_match = re.search(r'(\d{2}/\d{2}/\d{4})', notification_info)
+                        if date_match:
+                            date_text = date_match.group(1).replace('/', '-')
+                        else:
+                            # Try to extract year from notification number
+                            year_match = re.search(r'/(\d{4})', notification_info)
+                            if year_match:
+                                date_text = f"01-01-{year_match.group(1)}"  # Default to Jan 1 of that year
+                        
+                        # Create title from notification number and description
+                        title = f"GST {notification_info}"
+                        if description:
+                            title = f"{title} - {description[:50]}{'...' if len(description) > 50 else ''}"
+                        
+                        page_notifications.append({
+                            "title": title,
+                            "pdf_url": english_url,
+                            "date": date_text,
+                            "source": "GST",
+                            "notification_number": notification_info,
+                            "description": description
+                        })
+                        
+                except Exception as e:
+                    print(f"Error processing row: {e}")
+                    continue
+            
+            if not page_notifications:
+                print(f"No notifications found on page {page}, stopping")
+                break
+            
+            notifications.extend(page_notifications)
+            print(f"Found {len(page_notifications)} notifications on page {page}")
+            
+            # Check if there's a next page
+            next_page_link = soup.find("a", title="Go to next page")
+            if not next_page_link:
+                print("No next page link found, stopping")
+                break
+            
+            page += 1
+            time.sleep(1)  # Be polite with delays between requests
+        
+        print(f"Total GST notifications found: {len(notifications)}")
+        return notifications
+        
+    except Exception as e:
+        print(f"Error scraping GST notifications: {e}")
+        import traceback
+        traceback.print_exc()
+        return notifications  # Return whatever we've collected so far
+
+def scrape_gst_notifications() -> List[Dict]:
+    """Scrape GST Council notifications with pagination"""
+    base_url = "https://gstcouncil.gov.in/cgst-tax-notification"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    notifications = []
+    page = 0
+    max_pages = 10  # Limit to prevent infinite looping
+    
+    try:
+        while page < max_pages:
+            url = f"{base_url}?page={page}"
+            print(f"Scraping GST page {page}: {url}")
+            
+            r = requests.get(url, headers=headers, timeout=30)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+            
+            # Find the notifications table
+            table = soup.find("tbody")
+            if not table:
+                print(f"No table found on page {page}, stopping")
+                break
+            
+            rows = table.find_all("tr")
+            if not rows:
+                print(f"No rows found on page {page}, stopping")
+                break
+            
+            page_notifications = []
+            
+            for row in rows:
+                try:
+                    # Extract data from each column
+                    cells = row.find_all("td")
+                    if len(cells) < 5:
+                        continue
+                    
+                    # Column 1: Counter (we'll ignore this)
+                    # Column 2: Notification number and date
+                    notification_info = cells[1].get_text(strip=True)
+                    
+                    # Column 3: English PDF link
+                    english_link = cells[2].find("a")
+                    english_url = english_link.get("href") if english_link else None
+                    
+                    # Column 4: Hindi PDF link (we'll use English version)
+                    # Column 5: Description
+                    description = cells[4].get_text(strip=True)
+                    
+                    if english_url:
+                        # Make URL absolute
+                        if not english_url.startswith("http"):
+                            english_url = f"https://gstcouncil.gov.in{english_url}"
+                        
+                        # Extract date from notification info if possible
+                        date_text = "Unknown"
+                        date_match = re.search(r'(\d{2}/\d{2}/\d{4})', notification_info)
+                        if date_match:
+                            date_text = date_match.group(1).replace('/', '-')
+                        else:
+                            # Try to extract year from notification number
+                            year_match = re.search(r'/(\d{4})', notification_info)
+                            if year_match:
+                                date_text = f"01-01-{year_match.group(1)}"  # Default to Jan 1 of that year
+                        
+                        # Create title from notification number and description
+                        title = f"GST {notification_info}"
+                        if description:
+                            title = f"{title} - {description[:50]}{'...' if len(description) > 50 else ''}"
+                        
+                        page_notifications.append({
+                            "title": title,
+                            "pdf_url": english_url,
+                            "date": date_text,
+                            "source": "GST",
+                            "notification_number": notification_info,
+                            "description": description
+                        })
+                        
+                except Exception as e:
+                    print(f"Error processing row: {e}")
+                    continue
+            
+            if not page_notifications:
+                print(f"No notifications found on page {page}, stopping")
+                break
+            
+            notifications.extend(page_notifications)
+            print(f"Found {len(page_notifications)} notifications on page {page}")
+            
+            # Check if there's a next page
+            next_page_link = soup.find("a", title="Go to next page")
+            if not next_page_link:
+                print("No next page link found, stopping")
+                break
+            
+            page += 1
+            time.sleep(1)  # Be polite with delays between requests
+        
+        print(f"Total GST notifications found: {len(notifications)}")
+        return notifications
+        
+    except Exception as e:
+        print(f"Error scraping GST notifications: {e}")
+        import traceback
+        traceback.print_exc()
+        return notifications  # Return whatever we've collected so far
+
+def load_gst_metadata() -> List[Dict]:
+    """Load GST-specific metadata"""
+    if os.path.exists(METADATA_GST_FILE):
+        try:
+            with open(METADATA_GST_FILE, 'r') as f:
+                content = f.read().strip()
+                if not content:
+                    return []
+                return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: Error loading GST metadata, creating fresh: {e}")
+            return []
+    return []
+
+def save_gst_metadata(metadata: List[Dict]):
+    """Save GST-specific metadata"""
+    with open(METADATA_GST_FILE, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+def update_gst_only(target_pdf_dir: str = None) -> int:
+    """Download new GST notifications, ingest into vector DB and update GST metadata"""
+    target_pdf_dir = target_pdf_dir or os.path.join(DATA_DIR, "gst-pdfs")
+    os.makedirs(target_pdf_dir, exist_ok=True)
+
+    existing = load_gst_metadata()
+    existing_urls = {m.get("pdf_url") for m in existing}
+    new_count = 0
+
+    notifications = scrape_gst_notifications()
+    print(f"GST: found {len(notifications)} notifications")
+
+    for n in notifications:
+        pdf_url = n.get("pdf_url")
+        if not pdf_url or pdf_url in existing_urls:
+            continue
+
+        filename = get_pdf_filename(pdf_url, n.get("title", "gst_notification"))
+        pdf_path = download_pdf(pdf_url, filename, target_dir=target_pdf_dir)
+        
+        if not pdf_path:
+            continue
+
+        text = extract_text_from_pdf(pdf_path)
+        metadata = {
+            "title": n.get("title", "GST Notification"),
+            "date": n.get("date", "Unknown"),
+            "source": "GST",
+            "pdf_url": pdf_url,
+            "pdf_path": pdf_path,
+            "document_id": hashlib.md5(pdf_url.encode()).hexdigest(),
+            "notification_number": n.get("notification_number", ""),
+            "description": n.get("description", "")
+        }
+
+        if text:
+            docs = chunk_text(text, sanitize_metadata(metadata))
+            vector_store.add_documents(docs)
+
+        existing.append(metadata)
+        new_count += 1
+
+    if new_count:
+        save_gst_metadata(existing)
+
+    return new_count
