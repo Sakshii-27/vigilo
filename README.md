@@ -104,7 +104,7 @@ cd backend
 pip install -r requirements.txt
 
 # Start FastAPI server
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 5005 --reload
 
 # Add the following to .env.local (in the root directory)
 GROQ_API_KEY=your-api-key
