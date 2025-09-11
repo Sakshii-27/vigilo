@@ -227,14 +227,17 @@ export default function DashboardPage() {
     return () => clearTimeout(notificationTimer);
   }, []);
 
-  // Load amendments from backend
-  useEffect(() => {
+// Load amendments from backend
+
+useEffect(() => {
   const loadAmendments = async () => {
     const loadingMessages = [
       "Initializing compliance dashboard...",
       "Fetching your company profile...",
       "Analyzing your product portfolio...", 
       "Scanning latest FSSAI amendments...",
+      "Scanning DGFT trade notifications...", // Added DGFT specific message
+      "Scanning GST tax regulations...",
       "Cross-referencing regulations with your docs...",
       "Evaluating production legalities...",
       "Loading personalized compliance data..."
@@ -247,11 +250,39 @@ export default function DashboardPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/list`);
-      if (res.ok) {
-        const json = await res.json();
-        setAmendments((json as MetaItem[]).slice(0, 10));
+      // Load both FSSAI and DGFT amendments in parallel
+      const [fssaiRes, dgftRes, gstRes] = await Promise.all([
+        fetch(`${API_BASE}/list`),
+        fetch(`${API_BASE}/list-dgft`),
+        fetch(`${API_BASE}/list-gst`)
+      ]);
+      
+      let allAmendments: MetaItem[] = [];
+      
+      if (fssaiRes.ok) {
+        const fssaiData = await fssaiRes.json();
+        allAmendments = [...allAmendments, ...fssaiData];
       }
+      
+      if (dgftRes.ok) {
+        const dgftData = await dgftRes.json();
+        allAmendments = [...allAmendments, ...dgftData];
+      }
+
+      if (gstRes.ok) {
+        const gstData = await gstRes.json();
+        allAmendments = [...allAmendments, ...gstData];
+      }
+      
+      // Sort by date (most recent first) - handle "Unknown" dates
+      allAmendments.sort((a, b) => {
+        const dateA = a.date === 'Unknown' ? new Date(0) : new Date(a.date);
+        const dateB = b.date === 'Unknown' ? new Date(0) : new Date(b.date);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setAmendments(allAmendments.slice(0, 15)); // Show more amendments since we have multiple sources
+      
     } catch (err) {
       console.error("Failed to load amendments:", err);
     }
@@ -265,7 +296,7 @@ export default function DashboardPage() {
         ...prev,
         {
           id: 'dashboard-loaded',
-          message: 'Dashboard loaded! Found 12 relevant amendments for your company',
+          message: `Dashboard loaded! Found ${amendments.length} regulatory amendments from FSSAI and DGFT`,
           type: 'update'
         }
       ]);
@@ -273,7 +304,16 @@ export default function DashboardPage() {
   };
   loadAmendments();
 }, [API_BASE]);
-
+// After loading amendments, add this:
+console.log('Loaded amendments:', {
+  total: amendments.length,
+  bySource: {
+    fssai: amendments.filter(a => a.source === 'FSSAI').length,
+    dgft: amendments.filter(a => a.source === 'DGFT').length,
+    gst: amendments.filter(a => a.source === 'GST').length,
+    unknown: amendments.filter(a => !a.source).length
+  }
+});
 
   const filteredAmendments = useMemo(() => {
     return amendments.filter(amendment => {
