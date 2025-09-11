@@ -258,7 +258,7 @@ useEffect(() => {
       ]);
       
       let allAmendments: MetaItem[] = [];
-      
+
       if (fssaiRes.ok) {
         const fssaiData = await fssaiRes.json();
         allAmendments = [...allAmendments, ...fssaiData];
@@ -280,8 +280,18 @@ useEffect(() => {
         const dateB = b.date === 'Unknown' ? new Date(0) : new Date(b.date);
         return dateB.getTime() - dateA.getTime();
       });
-      
-      setAmendments(allAmendments.slice(0, 15)); // Show more amendments since we have multiple sources
+
+      setAmendments(allAmendments.slice(0, 35)); 
+      setTimeout(() => {
+        setNotifications(prev => [
+          ...prev,
+          {
+            id: 'dashboard-loaded',
+            message: `Dashboard loaded! Found ${amendments.length} regulatory amendments from FSSAI and DGFT`,
+            type: 'update'
+          }
+        ]);
+      }, 2000); 
       
     } catch (err) {
       console.error("Failed to load amendments:", err);
@@ -290,30 +300,11 @@ useEffect(() => {
     setPageLoading(false);
     setIntroLoading(false);
 
-    // Show welcome notifications after loading
-    setTimeout(() => {
-      setNotifications(prev => [
-        ...prev,
-        {
-          id: 'dashboard-loaded',
-          message: `Dashboard loaded! Found ${amendments.length} regulatory amendments from FSSAI and DGFT`,
-          type: 'update'
-        }
-      ]);
-    }, 2000);
+
   };
   loadAmendments();
 }, [API_BASE]);
-// After loading amendments, add this:
-console.log('Loaded amendments:', {
-  total: amendments.length,
-  bySource: {
-    fssai: amendments.filter(a => a.source === 'FSSAI').length,
-    dgft: amendments.filter(a => a.source === 'DGFT').length,
-    gst: amendments.filter(a => a.source === 'GST').length,
-    unknown: amendments.filter(a => !a.source).length
-  }
-});
+
 
   const filteredAmendments = useMemo(() => {
     return amendments.filter(amendment => {
