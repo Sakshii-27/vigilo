@@ -249,49 +249,64 @@ useEffect(() => {
       await new Promise(resolve => setTimeout(resolve, i === 0 ? 2500 : 1500));
     }
 
-    try {
-      // Load both FSSAI and DGFT amendments in parallel
-      const [fssaiRes, dgftRes, gstRes] = await Promise.all([
-        fetch(`${API_BASE}/list`),
-        fetch(`${API_BASE}/list-dgft`),
-        fetch(`${API_BASE}/list-gst`)
-      ]);
-      
+      try {
+      // Fetch curated latest relevant amendments (5 FSSAI, 3 DGFT, 3 GST) — include company_id if available
+      const query = companyId ? `?company_id=${encodeURIComponent(companyId)}` : "";
+      const res = await fetch(`${API_BASE}/latest-relevant${query}`);
       let allAmendments: MetaItem[] = [];
+      if (res.ok) {
+        const payload = await res.json();
+        console.debug("/latest-relevant raw response:", payload);
 
-      if (fssaiRes.ok) {
-        const fssaiData = await fssaiRes.json();
-        allAmendments = [...allAmendments, ...fssaiData];
-      }
-      
-      if (dgftRes.ok) {
-        const dgftData = await dgftRes.json();
-        allAmendments = [...allAmendments, ...dgftData];
+        // Backend returns an object {FSSAI: [...], DGFT: [...], GST: [...]}.
+        if (Array.isArray(payload)) {
+          allAmendments = payload;
+        } else if (payload && typeof payload === 'object') {
+          // Merge lists from each source preserving source info
+          const merged: MetaItem[] = [];
+          for (const key of ['FSSAI', 'DGFT', 'GST']) {
+            const list = payload[key];
+            if (Array.isArray(list)) {
+              // Ensure each item has a source
+              list.forEach((it: any) => {
+                try { if (!it.source) it.source = key; } catch(e) {}
+                merged.push(it as MetaItem);
+              });
+            }
+          }
+          allAmendments = merged;
+        } else {
+          console.warn('Unexpected /latest-relevant response shape', payload);
+        }
+      } else {
+        console.warn('/latest-relevant returned non-OK', res.status);
       }
 
-      if (gstRes.ok) {
-        const gstData = await gstRes.json();
-        allAmendments = [...allAmendments, ...gstData];
+      // `allAmendments` is populated from the curated `/latest-relevant` endpoint
+      // Guard: make sure it's an array before calling sort
+      if (!Array.isArray(allAmendments)) {
+        console.error('allAmendments is not an array', allAmendments);
+        allAmendments = [];
       }
-      
-      // Sort by date (most recent first) - handle "Unknown" dates
+
+      // Sort by date (most recent first) - handle "Unknown" dates and missing date fields
       allAmendments.sort((a, b) => {
-        const dateA = a.date === 'Unknown' ? new Date(0) : new Date(a.date);
-        const dateB = b.date === 'Unknown' ? new Date(0) : new Date(b.date);
+        const dateA = (!a || !a.date || a.date === 'Unknown') ? new Date(0) : new Date(a.date);
+        const dateB = (!b || !b.date || b.date === 'Unknown') ? new Date(0) : new Date(b.date);
         return dateB.getTime() - dateA.getTime();
       });
 
-      setAmendments(allAmendments.slice(0, 35)); 
+      setAmendments(allAmendments.slice(0, 35));
       setTimeout(() => {
         setNotifications(prev => [
           ...prev,
           {
             id: 'dashboard-loaded',
-            message: `Dashboard loaded! Found ${amendments.length} regulatory amendments from FSSAI and DGFT`,
+            message: `Dashboard loaded! Found ${allAmendments.length} curated regulatory amendments`,
             type: 'update'
           }
         ]);
-      }, 2000); 
+      }, 2000);
       
     } catch (err) {
       console.error("Failed to load amendments:", err);
